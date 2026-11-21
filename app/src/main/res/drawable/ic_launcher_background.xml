@@ -1,13 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- 深邃黑曜蓝宝石基底渐变 -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="96"
+                android:endY="102"
+                android:startX="12"
+                android:startY="6"
+                android:type="linear">
+                <item
+                    android:color="#FF071024"
+                    android:offset="0.0" />
+                <item
+                    android:color="#FF0C1D42"
+                    android:offset="0.48" />
+                <item
+                    android:color="#FF050B1A"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 中心极光环境背光晕染 -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="50"
+                android:centerY="44"
+                android:gradientRadius="52"
+                android:type="radial">
+                <item
+                    android:color="#521D4ED8"
+                    android:offset="0.0" />
+                <item
+                    android:color="#260EA5E9"
+                    android:offset="0.54" />
+                <item
+                    android:color="#00050B1A"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 左上角柔和玻璃天光反射 -->
+    <path android:pathData="M0,0 L108,0 L108,42 C76,54 36,58 0,46 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="54"
+                android:endY="54"
+                android:startX="18"
+                android:startY="0"
+                android:type="linear">
+                <item
+                    android:color="#20BAE6FD"
+                    android:offset="0.0" />
+                <item
+                    android:color="#00BAE6FD"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 精密外围经纬刻度细环 -->
     <path
-        android:fillColor="#0B132B"
-        android:pathData="M0,0h108v108h-108z" />
+        android:fillColor="#00000000"
+        android:pathData="M54,14 A40,40 0 1,1 54,94 A40,40 0 1,1 54,14 Z"
+        android:strokeWidth="0.55"
+        android:strokeColor="#1F7DD3FC" />
     <path
-        android:fillColor="#1C2541"
-        android:pathData="M0,66 C34,46 74,84 108,50 L108,108 L0,108 Z" />
+        android:fillColor="#00000000"
+        android:pathData="M54,20 A34,34 0 1,1 54,88 A34,34 0 1,1 54,20 Z"
+        android:strokeWidth="0.55"
+        android:strokeColor="#1838BDF8" />
 </vector>

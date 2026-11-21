@@ -1,5 +1,19 @@
 package app.stateside.env.model
 
+enum class AppThemeMode(
+    val id: String,
+    val label: String
+) {
+    SYSTEM("system", "跟随系统"),
+    LIGHT("light", "浅色"),
+    DARK("dark", "深色");
+
+    companion object {
+        fun fromId(id: String?): AppThemeMode =
+            entries.firstOrNull { it.id == id } ?: SYSTEM
+    }
+}
+
 /**
  * 内置美国目标区域与运营商显示预设。
  * 默认使用「保持原运营商显示（推荐）」：仅将电话卡国家码（SIM Country ISO）覆盖为美国 `us`（与 Simlet 默认行为一致），

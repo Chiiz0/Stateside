@@ -2,6 +2,7 @@ package app.stateside.env.data
 
 import android.content.Context
 import android.provider.Settings
+import app.stateside.env.model.AppThemeMode
 import app.stateside.env.model.CoreSuiteApp
 import app.stateside.env.model.StatesideDefaults
 import app.stateside.env.model.UsCarrierPreset
@@ -19,6 +20,8 @@ data class UserSettings(
     val slot0DisplayOverride: String = "",
     val slot1DisplayOverride: String = "",
     val autoRestoreOnBoot: Boolean = true,
+    val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
+    val useDynamicColor: Boolean = false,
     // 记录用户当前期望处于美境（开启美境时置 true，主动执行「恢复国内默认」时置 false）
     val isStatesideDesired: Boolean = false,
     // 记录最近一次成功执行美境覆盖时的系统 BOOT_COUNT，避免未授电话权限时误判已生效
@@ -105,6 +108,7 @@ class UserPrefsRepository(context: Context) {
         val extraSet = prefs.getStringSet(KEY_EXTRA_ENGLISH_PKGS, emptySet())?.toSet() ?: emptySet()
         val confirmedSet = prefs.getStringSet(KEY_CONFIRMED_ENGLISH_PKGS, emptySet())?.toSet() ?: emptySet()
         val lastAppliedTs = prefs.getLong(KEY_LAST_APPLIED_TS, 0L)
+        val themeId = prefs.getString(KEY_THEME_MODE, AppThemeMode.SYSTEM.id)
         return UserSettings(
             isAdbPaired = prefs.getBoolean(KEY_PAIRED, false),
             lastConnectPort = prefs.getInt(KEY_LAST_PORT, 0),
@@ -114,6 +118,8 @@ class UserPrefsRepository(context: Context) {
             slot0DisplayOverride = slot0Override,
             slot1DisplayOverride = slot1Override,
             autoRestoreOnBoot = prefs.getBoolean(KEY_AUTO_BOOT, true),
+            themeMode = AppThemeMode.fromId(themeId),
+            useDynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, false),
             isStatesideDesired = prefs.getBoolean(KEY_STATESIDE_DESIRED, lastAppliedTs > 0L),
             appliedBootCount = prefs.getInt(KEY_APPLIED_BOOT_COUNT, -1),
             disabledSuiteIds = disabledSet,
@@ -176,6 +182,25 @@ class UserPrefsRepository(context: Context) {
         _settings.value = load()
     }
 
+    fun setThemeMode(mode: AppThemeMode) {
+        prefs.edit().putString(KEY_THEME_MODE, mode.id).apply()
+        _settings.value = load()
+    }
+
+    fun setUseDynamicColor(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DYNAMIC_COLOR, enabled).apply()
+        _settings.value = load()
+    }
+
+    fun resetAdbPairingRecord() {
+        prefs.edit()
+            .putBoolean(KEY_PAIRED, false)
+            .putInt(KEY_LAST_PORT, 0)
+            .putInt(KEY_MANUAL_PORT, 0)
+            .apply()
+        _settings.value = load()
+    }
+
     fun toggleCoreSuiteApp(suiteApp: CoreSuiteApp) {
         val disabled = _settings.value.disabledSuiteIds.toMutableSet()
         if (!disabled.add(suiteApp.id)) {
@@ -226,6 +251,8 @@ class UserPrefsRepository(context: Context) {
         private const val KEY_SLOT0_OVERRIDE = "slot0_display_override"
         private const val KEY_SLOT1_OVERRIDE = "slot1_display_override"
         private const val KEY_AUTO_BOOT = "auto_restore_on_boot"
+        private const val KEY_THEME_MODE = "app_theme_mode"
+        private const val KEY_DYNAMIC_COLOR = "use_dynamic_color"
         private const val KEY_STATESIDE_DESIRED = "stateside_desired_active"
         private const val KEY_APPLIED_BOOT_COUNT = "applied_boot_count"
         private const val KEY_DISABLED_SUITE_IDS = "disabled_suite_ids"

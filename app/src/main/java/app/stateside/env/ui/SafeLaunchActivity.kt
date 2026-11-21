@@ -32,11 +32,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import app.stateside.env.StatesideApp
 import app.stateside.env.adb.LocalAdbManager
 import app.stateside.env.model.CoreSuiteApp
 import app.stateside.env.oem.ChineseRomGuide
 import app.stateside.env.privileged.PrivilegedAction
 import app.stateside.env.shortcut.AppLaunchGuardHelper
+import app.stateside.env.ui.components.StatesideBrandEmblem
 import app.stateside.env.ui.theme.StatesideTheme
 import kotlinx.coroutines.launch
 
@@ -74,8 +76,12 @@ class SafeLaunchActivity : ComponentActivity() {
             return
         }
 
+        val savedPrefs = (application as StatesideApp).prefs.settings.value
         setContent {
-            StatesideTheme {
+            StatesideTheme(
+                themeMode = savedPrefs.themeMode,
+                dynamicColor = savedPrefs.useDynamicColor
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -91,11 +97,15 @@ class SafeLaunchActivity : ComponentActivity() {
                             modifier = Modifier.padding(18.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Text(
-                                text = "美境安全拦截 · $targetTitle",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                StatesideBrandEmblem(size = 32.dp, isActive = false)
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    text = "美境安全拦截 · $targetTitle",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                             if (errorReason == null) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     CircularProgressIndicator(

@@ -34,7 +34,6 @@ class MainActivity : ComponentActivity() {
                 val perms = buildList {
                     add(Manifest.permission.READ_PHONE_STATE)
                     add(Manifest.permission.POST_NOTIFICATIONS)
-                    // Android 17 (API 37) 对声明了 ACCESS_LOCAL_NETWORK 的应用强制校验本地网络运行时权限（不论 targetSdk 是否为 36）
                     if (Build.VERSION.SDK_INT >= 37) {
                         add("android.permission.ACCESS_LOCAL_NETWORK")
                     }
@@ -42,7 +41,10 @@ class MainActivity : ComponentActivity() {
                 permissionLauncher.launch(perms.toTypedArray())
             }
 
-            StatesideTheme {
+            StatesideTheme(
+                themeMode = state.userSettings.themeMode,
+                dynamicColor = state.userSettings.useDynamicColor
+            ) {
                 MainScreen(
                     state = state,
                     onRequestPermissions = requestRuntimePermissions,
@@ -55,10 +57,16 @@ class MainActivity : ComponentActivity() {
                     onApplyCustomCarrierLabel = viewModel::applyCustomCarrierLabel,
                     onUpdateSlotDisplayOverride = viewModel::updateSlotDisplayOverride,
                     onToggleAutoBoot = viewModel::setAutoRestoreOnBoot,
+                    onSelectThemeMode = viewModel::setThemeMode,
+                    onToggleDynamicColor = viewModel::setUseDynamicColor,
+                    onSaveManualPort = viewModel::saveManualConnectPort,
+                    onResetPairingState = viewModel::resetAdbPairingState,
                     onToggleCoreSuiteApp = viewModel::toggleCoreSuiteApp,
                     onOpenAppPicker = viewModel::loadSelectableUserAppsIfNeeded,
                     onToggleExtraPkg = viewModel::toggleExtraEnglishPackage,
                     onPinShortcutForApp = viewModel::requestPinShortcutForApp,
+                    onBuildDiagnostics = viewModel::buildDiagnosticSummary,
+                    onNotifyBanner = viewModel::notifyBanner,
                     onClearMessages = viewModel::clearMessages
                 )
             }

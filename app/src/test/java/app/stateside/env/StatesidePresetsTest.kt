@@ -1,6 +1,7 @@
 package app.stateside.env
 
 import app.stateside.env.data.UserSettings
+import app.stateside.env.model.AppThemeMode
 import app.stateside.env.model.CoreSuiteApp
 import app.stateside.env.model.MccIsoResolver
 import app.stateside.env.model.PairingInputParser
@@ -65,6 +66,11 @@ class StatesidePresetsTest {
         )
         assertEquals("X", perSlotSettings.resolveTargetCarrierLabelForSlot(0))
         assertNull(perSlotSettings.resolveTargetCarrierLabelForSlot(1))
+
+        assertEquals(AppThemeMode.SYSTEM, AppThemeMode.fromId(null))
+        assertEquals(AppThemeMode.DARK, AppThemeMode.fromId("dark"))
+        assertEquals(AppThemeMode.LIGHT, AppThemeMode.fromId("light"))
+        assertFalse(perSlotSettings.useDynamicColor)
     }
 
     @Test

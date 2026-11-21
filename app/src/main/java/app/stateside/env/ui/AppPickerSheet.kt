@@ -15,16 +15,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -34,9 +37,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.stateside.env.ui.components.InstalledAppIcon
+import app.stateside.env.ui.components.StatusPillBadge
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,18 +76,30 @@ fun AppPickerSheet(
                 modifier = Modifier
                     .widthIn(max = 600.dp)
                     .fillMaxWidth()
-                    .fillMaxHeight(0.75f)
+                    .fillMaxHeight(0.78f)
                     .align(Alignment.TopCenter)
                     .navigationBarsPadding()
                     .padding(horizontal = horizontalPad)
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "选择扩展英语应用",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    StatusPillBadge(
+                        text = "已选 ${selectedPackages.size} 款",
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+
                 Text(
-                    text = "扩展英语应用清单",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "额外勾选希望固定以美国英语（en-US）运行的应用，勾选后同步接入主界面安全快启坞与桌面守卫图标。",
+                    text = "开启开关的应用将在美境激活时自动锁定美式英语（en-US），并同步加入工作台安全快启坞。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
@@ -91,12 +109,20 @@ fun AppPickerSheet(
                     value = query,
                     onValueChange = { query = it },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    placeholder = { Text("搜索已安装应用…", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    trailingIcon = if (query.isNotEmpty()) {
+                        {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "清空搜索")
+                            }
+                        }
+                    } else null,
+                    placeholder = { Text("按应用名或包名搜索…", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    shape = RoundedCornerShape(14.dp),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
 
                 if (apps.isEmpty()) {
                     Box(
@@ -106,6 +132,19 @@ fun AppPickerSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator()
+                    }
+                } else if (filtered.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "未找到匹配「$query」的应用",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else {
                     LazyColumn(
@@ -118,20 +157,24 @@ fun AppPickerSheet(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable { onTogglePackage(item.packageName) }
-                                    .padding(vertical = 10.dp),
+                                    .padding(horizontal = 4.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 InstalledAppIcon(
                                     packageName = item.packageName,
-                                    size = 36.dp,
+                                    size = 38.dp,
                                     modifier = Modifier.padding(end = 12.dp)
                                 )
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
                                     Text(
                                         text = item.appLabel,
                                         style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Medium,
+                                        fontWeight = FontWeight.SemiBold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -143,12 +186,12 @@ fun AppPickerSheet(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
-                                Checkbox(
+                                Switch(
                                     checked = checked,
                                     onCheckedChange = { onTogglePackage(item.packageName) }
                                 )
                             }
-                            HorizontalDivider()
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                         }
                     }
                 }

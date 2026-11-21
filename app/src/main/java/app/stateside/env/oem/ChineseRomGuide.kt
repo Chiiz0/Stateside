@@ -160,4 +160,15 @@ object ChineseRomGuide {
         }
         runCatching { context.startActivity(intent) }
     }
+
+    fun openDateTimeSettings(context: Context) {
+        val intent = Intent(Settings.ACTION_DATE_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(intent) }.onFailure {
+            runCatching {
+                context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+    }
 }
