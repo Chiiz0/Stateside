@@ -95,3 +95,15 @@ sequenceDiagram
 
 1. **防无权限误放行**：在 `DeviceProtectedStorage` 中记录每次成功写入美境时的系统 `Settings.Global.BOOT_COUNT`。当用户尚未授予 `READ_PHONE_STATE` 权限时，仅当当前系统 `BOOT_COUNT` 与上次写入时严格一致才认定美境在线；一旦手机重启（`BOOT_COUNT + 1`），桌面快捷方式与主界面立即进入待恢复拦截态。
 2. **攻克开机 Wi-Fi 慢关联**：真机重启后通常需 5 ~ 30 秒才会关联上路由器并启动无线调试 TLS 服务，远超 `BroadcastReceiver.goAsync()` 的 10 秒上限。`BootRestoreReceiver` 在开机广播中向系统 `JobScheduler` 注册绑定 `NetworkCapabilities.TRANSPORT_WIFI` 约束的 `BootRestoreJobService`，无论用户何时解锁或连上 Wi-Fi，系统都会第一时间唤醒完成静默补写。
+
+---
+
+## 6. 穿透 5G SA 核心网 NITZ 尊享显标（如「中国移动全球通钻卡」）的状态栏定制机制
+
+在开通了运营商 5G 尊享显标（3GPP TS 24.501 `CONFIGURATION UPDATE COMMAND` / NITZ `Full name for network`，如「中国移动全球通钻卡」）的号卡上：
+1. 基站侧直接将 `CellIdentityNr.mAlphaLong` 与 `ServiceState.mOperatorAlphaLong` 置为定制名称；
+2. 部分国产 ROM（如 ColorOS 的 `1001_CMCC` 配置）默认开启 `config_carrier_support_nitz = true`，并在 `CarrierDisplayNameResolver (CDNR)` 中命中 `rule=1`（`showSpn = false, showPlmn = true`）。若仅覆盖 `carrier_name_string (EF_SPN)`，`spn` 虽变但因 `showSpn = false` 被隐藏，状态栏仍显示锁死的基站 `plmn`。
+
+美境支持两种精细化策略：
+- **默认无痕模式（`US_KEEP_CARRIER`）**：仅写入 `sim_country_iso_override_string = "us"`，确保海外与 AI 应用识别为美区卡的同时，100% 保留状态栏原生运营商或尊享显标；
+- **全局 / 分卡自定义显示模式（如单独将卡 1 设为 `X`）**：在 `CarrierConfig` 会话层协同注入 `pnn_override_string_array`（3GPP `EF_PNN` 首选网络全称/简称，在 AOSP `CDNR.getCarrierDisplayNameFromEf()` 中优先级高于 `ServiceState.getOperatorAlpha()`）、清空 `opl_override_opl_string_array`、绑定当前注册 `ehplmn_override_string_array` + `force_home_network_bool = true`、设定单一显示位掩码 `spn_display_condition_override_int = 1` 并关闭 `config_carrier_support_nitz = false`，从而在不触碰基带分区的纯内存层干净接管状态栏与控制中心运营商文案。

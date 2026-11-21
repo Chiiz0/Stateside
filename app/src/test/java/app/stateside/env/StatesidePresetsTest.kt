@@ -56,6 +56,15 @@ class StatesidePresetsTest {
         assertEquals(UsCarrierPreset.TMOBILE, UsCarrierPreset.fromId("tmobile_us"))
         assertFalse(UsCarrierPreset.TMOBILE.keepsOriginalCarrierName)
         assertEquals("en-US", StatesideDefaults.US_ENGLISH_TAG)
+
+        // 验证分卡独立显示名解析（如卡1单独设为 X，卡2跟随默认保持原运营商）
+        val perSlotSettings = UserSettings(
+            selectedCarrier = UsCarrierPreset.US_KEEP_CARRIER,
+            slot0DisplayOverride = "X",
+            slot1DisplayOverride = ""
+        )
+        assertEquals("X", perSlotSettings.resolveTargetCarrierLabelForSlot(0))
+        assertNull(perSlotSettings.resolveTargetCarrierLabelForSlot(1))
     }
 
     @Test

@@ -21,7 +21,7 @@
 **Stateside (`app.stateside.env`)** consolidates what previously required **three separate geek utilities** (`Shizuku` + `Simlet / Nrfr` + `Per-App Language`) into a single, zero-dependency, one-tap Android application (~6 MB R8 release APK):
 
 - Keeps your **system UI language unchanged** (e.g., Simplified Chinese) while automatically locking **TikTok, X, Claude, ChatGPT**, and any user-selected apps to **`en-US` (US English)**—including cloned Dual-App profiles (`user 999`) and Google Play Dynamic Delivery language splits (`split_config.en.apk`).
-- Spoofs active Dual-SIM country ISO at runtime to **US (`us`) while keeping your original status-bar carrier display untouched by default** (aligned with `Simlet`, with optional `T-Mobile` / `AT&T` / `Verizon` name presets) without Root.
+- Spoofs active Dual-SIM country ISO at runtime to **US (`us`) while keeping your original status-bar carrier display untouched by default**—or lets you customize status-bar text **per SIM slot** (e.g., `X` / `Zero` / `T-Mobile`), cleanly overriding even **5G SA NAS NITZ VIP network labels** (such as China Mobile GoTone Diamond cards) via 3GPP `EF_PNN` injection without Root.
 - Natively overcomes **Android 15 QPR / Android 16 / Android 17 `CVE-2025-48617`** (`SecurityException: overrideConfig cannot be invoked by shell`) via in-process `Instrumentation` (`am instrument -w --no-restart`) + `UiAutomation.adoptShellPermissionIdentity()` running under the app's own `10xxx` UID.
 
 ---

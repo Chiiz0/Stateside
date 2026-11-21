@@ -14,6 +14,10 @@ data class UserSettings(
     val lastConnectPort: Int = 0,
     val manualConnectPort: Int = 0,
     val selectedCarrier: UsCarrierPreset = UsCarrierPreset.US_KEEP_CARRIER,
+    val customCarrierLabel: String = "X",
+    // 单卡槽独立显示名覆盖：空串代表跟随全局模式；"__KEEP_NATIVE__" 代表该卡强制保留原运营商；其余非空值代表该卡单独显示为指定文案（如卡1单独显示为 "X"）
+    val slot0DisplayOverride: String = "",
+    val slot1DisplayOverride: String = "",
     val autoRestoreOnBoot: Boolean = true,
     // 记录用户当前期望处于美境（开启美境时置 true，主动执行「恢复国内默认」时置 false）
     val isStatesideDesired: Boolean = false,
@@ -29,6 +33,29 @@ data class UserSettings(
 
     fun effectiveEnglishPackages(): List<String> =
         StatesideDefaults.buildTargetEnglishPackages(disabledSuiteIds, extraEnglishPackages)
+
+    fun slotOverrideFor(slotIndex: Int): String = when (slotIndex) {
+        0 -> slot0DisplayOverride
+        1 -> slot1DisplayOverride
+        else -> ""
+    }
+
+    /**
+     * 解析指定卡槽（0=卡1，1=卡2）最终期望呈现的运营商显示名：
+     * - 返回 `null`：该卡槽保持原运营商名称不覆盖（仅将 SIM 国家码设为 us）；
+     * - 返回非空字符串（如 `"X"` / `"T-Mobile"`）：强力覆盖该卡槽的 SPN 与 PNN（含穿透移动全球通钻卡 5G NITZ 显标）。
+     */
+    fun resolveTargetCarrierLabelForSlot(slotIndex: Int): String? {
+        val perSlot = slotOverrideFor(slotIndex).trim()
+        if (perSlot == UserPrefsRepository.SLOT_KEEP_NATIVE_TOKEN) return null
+        if (perSlot.isNotEmpty()) return perSlot
+
+        return when (selectedCarrier) {
+            UsCarrierPreset.US_KEEP_CARRIER -> null
+            UsCarrierPreset.CUSTOM -> customCarrierLabel.trim().ifEmpty { "X" }
+            else -> selectedCarrier.carrierNameOverride.takeIf { it.isNotBlank() }
+        }
+    }
 
     /**
      * 严谨判断当前真机是否已处于美境就绪状态：
@@ -71,6 +98,9 @@ class UserPrefsRepository(context: Context) {
 
     private fun load(): UserSettings {
         val carrierId = prefs.getString(KEY_CARRIER, UsCarrierPreset.US_KEEP_CARRIER.id)
+        val customLabel = prefs.getString(KEY_CUSTOM_CARRIER_LABEL, "X")?.trim().orEmpty().ifEmpty { "X" }
+        val slot0Override = prefs.getString(KEY_SLOT0_OVERRIDE, "").orEmpty()
+        val slot1Override = prefs.getString(KEY_SLOT1_OVERRIDE, "").orEmpty()
         val disabledSet = prefs.getStringSet(KEY_DISABLED_SUITE_IDS, emptySet())?.toSet() ?: emptySet()
         val extraSet = prefs.getStringSet(KEY_EXTRA_ENGLISH_PKGS, emptySet())?.toSet() ?: emptySet()
         val confirmedSet = prefs.getStringSet(KEY_CONFIRMED_ENGLISH_PKGS, emptySet())?.toSet() ?: emptySet()
@@ -80,6 +110,9 @@ class UserPrefsRepository(context: Context) {
             lastConnectPort = prefs.getInt(KEY_LAST_PORT, 0),
             manualConnectPort = prefs.getInt(KEY_MANUAL_PORT, 0),
             selectedCarrier = UsCarrierPreset.fromId(carrierId),
+            customCarrierLabel = customLabel,
+            slot0DisplayOverride = slot0Override,
+            slot1DisplayOverride = slot1Override,
             autoRestoreOnBoot = prefs.getBoolean(KEY_AUTO_BOOT, true),
             isStatesideDesired = prefs.getBoolean(KEY_STATESIDE_DESIRED, lastAppliedTs > 0L),
             appliedBootCount = prefs.getInt(KEY_APPLIED_BOOT_COUNT, -1),
@@ -111,6 +144,30 @@ class UserPrefsRepository(context: Context) {
 
     fun setSelectedCarrier(preset: UsCarrierPreset) {
         prefs.edit().putString(KEY_CARRIER, preset.id).apply()
+        _settings.value = load()
+    }
+
+    fun setCustomCarrierLabel(label: String) {
+        val sanitized = label.trim().take(24).ifEmpty { "X" }
+        prefs.edit()
+            .putString(KEY_CUSTOM_CARRIER_LABEL, sanitized)
+            .putString(KEY_CARRIER, UsCarrierPreset.CUSTOM.id)
+            .apply()
+        _settings.value = load()
+    }
+
+    fun setSlotDisplayOverride(slotIndex: Int, rawOverride: String) {
+        val key = when (slotIndex) {
+            0 -> KEY_SLOT0_OVERRIDE
+            1 -> KEY_SLOT1_OVERRIDE
+            else -> return
+        }
+        val clean = if (rawOverride == SLOT_KEEP_NATIVE_TOKEN) {
+            SLOT_KEEP_NATIVE_TOKEN
+        } else {
+            rawOverride.trim().take(24)
+        }
+        prefs.edit().putString(key, clean).apply()
         _settings.value = load()
     }
 
@@ -159,10 +216,15 @@ class UserPrefsRepository(context: Context) {
     }
 
     companion object {
+        const val SLOT_KEEP_NATIVE_TOKEN = "__KEEP_NATIVE__"
+
         private const val KEY_PAIRED = "adb_paired"
         private const val KEY_LAST_PORT = "last_connect_port"
         private const val KEY_MANUAL_PORT = "manual_connect_port"
         private const val KEY_CARRIER = "selected_carrier_preset_v2"
+        private const val KEY_CUSTOM_CARRIER_LABEL = "custom_carrier_label"
+        private const val KEY_SLOT0_OVERRIDE = "slot0_display_override"
+        private const val KEY_SLOT1_OVERRIDE = "slot1_display_override"
         private const val KEY_AUTO_BOOT = "auto_restore_on_boot"
         private const val KEY_STATESIDE_DESIRED = "stateside_desired_active"
         private const val KEY_APPLIED_BOOT_COUNT = "applied_boot_count"

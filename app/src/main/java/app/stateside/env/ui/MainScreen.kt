@@ -53,6 +53,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -78,6 +79,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.stateside.env.data.UserPrefsRepository
 import app.stateside.env.model.CoreSuiteApp
 import app.stateside.env.model.UsCarrierPreset
 import app.stateside.env.oem.ChineseRomGuide
@@ -95,6 +97,8 @@ fun MainScreen(
     onSafeLaunchApp: (String) -> Unit,
     onRestoreDefault: () -> Unit,
     onSelectCarrier: (UsCarrierPreset) -> Unit,
+    onApplyCustomCarrierLabel: (String) -> Unit,
+    onUpdateSlotDisplayOverride: (Int, String) -> Unit,
     onToggleAutoBoot: (Boolean) -> Unit,
     onToggleCoreSuiteApp: (CoreSuiteApp) -> Unit,
     onOpenAppPicker: () -> Unit,
@@ -109,6 +113,10 @@ fun MainScreen(
     var showAppPicker by remember { mutableStateOf(false) }
     var showCarrierOptions by remember { mutableStateOf(false) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
+    var editingSlotSim by remember { mutableStateOf<SimCardUiModel?>(null) }
+    var customCarrierDraft by remember(state.userSettings.customCarrierLabel) {
+        mutableStateOf(state.userSettings.customCarrierLabel)
+    }
 
     LaunchedEffect(state.toastBanner) {
         val msg = state.toastBanner
@@ -338,7 +346,11 @@ fun MainScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "当前模式：${state.userSettings.selectedCarrier.chipLabel}",
+                                    text = if (state.userSettings.selectedCarrier == UsCarrierPreset.CUSTOM) {
+                                        "当前全局模式：自定义「${state.userSettings.customCarrierLabel}」"
+                                    } else {
+                                        "当前全局模式：${state.userSettings.selectedCarrier.chipLabel}"
+                                    },
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                     maxLines = 1,
@@ -358,9 +370,9 @@ fun MainScreen(
                         }
 
                         AnimatedVisibility(visible = showCarrierOptions) {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(
-                                    text = "默认「保持原运营商」与 Simlet 一致：仅将 SIM 国家码设为美国 (US)，状态栏与通知栏保留原中国电信/联通/移动不变；也可按需切换显示名：",
+                                    text = "默认「保持原运营商」仅将 SIM 国家码设为美国 (US)；若选择自定义或指定运营商（也可点击下方卡槽单独设置某张卡显示为 X），将自动穿透移动全球通钻卡等 5G 显标锁定：",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -384,6 +396,29 @@ fun MainScreen(
                                                 { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                             } else null
                                         )
+                                    }
+                                }
+
+                                if (state.userSettings.selectedCarrier == UsCarrierPreset.CUSTOM) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedTextField(
+                                            value = customCarrierDraft,
+                                            onValueChange = { customCarrierDraft = it.take(24) },
+                                            label = { Text("自定义运营商显示（如 X）", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Button(
+                                            enabled = !state.isWorking,
+                                            onClick = { onApplyCustomCarrierLabel(customCarrierDraft) },
+                                            modifier = Modifier.heightIn(min = 48.dp)
+                                        ) {
+                                            Text("应用", softWrap = false, maxLines = 1)
+                                        }
                                     }
                                 }
                             }
@@ -461,12 +496,47 @@ fun MainScreen(
                                                 maxLines = 1
                                             )
                                             Text(
-                                                text = "显示：${sim.currentReportedCarrier}",
+                                                text = "状态栏显示：${sim.currentReportedCarrier}",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.SemiBold,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
+                                        }
+
+                                        val slotRule = state.userSettings.slotOverrideFor(sim.slotIndex)
+                                        val slotChipText = when {
+                                            slotRule.isBlank() -> "单独设${sim.slotLabel}显示名（如设为 X）"
+                                            slotRule == UserPrefsRepository.SLOT_KEEP_NATIVE_TOKEN -> "${sim.slotLabel}专属：保持原运营商（点此修改）"
+                                            else -> "${sim.slotLabel}专属：显示为「$slotRule」（点此修改）"
+                                        }
+                                        Surface(
+                                            onClick = { editingSlotSim = sim },
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Settings,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(Modifier.width(5.dp))
+                                                Text(
+                                                    text = slotChipText,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -568,6 +638,95 @@ fun MainScreen(
             selectedPackages = state.userSettings.extraEnglishPackages,
             onTogglePackage = onToggleExtraPkg,
             onDismiss = { showAppPicker = false }
+        )
+    }
+
+    val slotTarget = editingSlotSim
+    if (slotTarget != null) {
+        val currentRule = state.userSettings.slotOverrideFor(slotTarget.slotIndex)
+        var draftText by remember(slotTarget.slotIndex, currentRule) {
+            mutableStateOf(
+                if (currentRule.isNotBlank() && currentRule != UserPrefsRepository.SLOT_KEEP_NATIVE_TOKEN) {
+                    currentRule
+                } else {
+                    "X"
+                }
+            )
+        }
+        AlertDialog(
+            onDismissRequest = { editingSlotSim = null },
+            title = { Text("单独设置 ${slotTarget.slotLabel} 状态栏显示") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "可单独为 ${slotTarget.slotLabel} 指定状态栏运营商文案（自动穿透移动全球通钻卡等 5G 核心网显标锁定，另一张卡不受影响）：",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = currentRule == "X",
+                            onClick = {
+                                onUpdateSlotDisplayOverride(slotTarget.slotIndex, "X")
+                                editingSlotSim = null
+                            },
+                            label = { Text("设为 X", softWrap = false) }
+                        )
+                        FilterChip(
+                            selected = currentRule == UserPrefsRepository.SLOT_KEEP_NATIVE_TOKEN,
+                            onClick = {
+                                onUpdateSlotDisplayOverride(
+                                    slotTarget.slotIndex,
+                                    UserPrefsRepository.SLOT_KEEP_NATIVE_TOKEN
+                                )
+                                editingSlotSim = null
+                            },
+                            label = { Text("保持原运营商", softWrap = false) }
+                        )
+                        FilterChip(
+                            selected = currentRule == "T-Mobile",
+                            onClick = {
+                                onUpdateSlotDisplayOverride(slotTarget.slotIndex, "T-Mobile")
+                                editingSlotSim = null
+                            },
+                            label = { Text("T-Mobile", softWrap = false) }
+                        )
+                        FilterChip(
+                            selected = currentRule.isBlank(),
+                            onClick = {
+                                onUpdateSlotDisplayOverride(slotTarget.slotIndex, "")
+                                editingSlotSim = null
+                            },
+                            label = { Text("跟随全局", softWrap = false) }
+                        )
+                    }
+                    OutlinedTextField(
+                        value = draftText,
+                        onValueChange = { draftText = it.take(24) },
+                        label = { Text("自定义文字（如 X）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onUpdateSlotDisplayOverride(slotTarget.slotIndex, draftText.trim().ifEmpty { "X" })
+                        editingSlotSim = null
+                    }
+                ) {
+                    Text("保存并生效")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingSlotSim = null }) {
+                    Text("取消")
+                }
+            }
         )
     }
 
@@ -953,10 +1112,20 @@ private fun HeroWorkspaceCard(
                         text = when {
                             state.isEnvironmentReady && state.hasPrivilegeChannel -> {
                                 val channelTag = if (state.hasRootAccess) "Root 直通" else "本机无线调试"
-                                val carrierDesc = if (state.userSettings.selectedCarrier.keepsOriginalCarrierName) {
-                                    "双卡美国 (US · 保留原运营商)"
-                                } else {
-                                    "双卡美国 ${state.userSettings.selectedCarrier.carrierNameOverride} (US)"
+                                val carrierDesc = when {
+                                    state.userSettings.slot0DisplayOverride.isNotBlank() ||
+                                        state.userSettings.slot1DisplayOverride.isNotBlank() -> {
+                                        "双卡美国 (US · 已启用分卡独立显示)"
+                                    }
+                                    state.userSettings.selectedCarrier == UsCarrierPreset.CUSTOM -> {
+                                        "双卡美国 · 显示「${state.userSettings.customCarrierLabel}」"
+                                    }
+                                    state.userSettings.selectedCarrier.keepsOriginalCarrierName -> {
+                                        "双卡美国 (US · 保留原运营商)"
+                                    }
+                                    else -> {
+                                        "双卡美国 ${state.userSettings.selectedCarrier.carrierNameOverride} (US)"
+                                    }
                                 }
                                 if (state.unconfirmedEnglishAppsCount > 0) {
                                     "通道：$channelTag · $carrierDesc · ${state.unconfirmedEnglishAppsCount} 款新应用待同步"

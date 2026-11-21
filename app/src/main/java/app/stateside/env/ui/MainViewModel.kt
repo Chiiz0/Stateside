@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class SimCardUiModel(
+    val slotIndex: Int,
     val slotLabel: String,
     val realCountryLabel: String,
     val currentReportedIso: String,
@@ -438,6 +439,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun applyCustomCarrierLabel(customLabel: String) {
+        prefs.setCustomCarrierLabel(customLabel)
+        val state = uiState.value
+        val display = customLabel.trim().ifEmpty { "X" }
+        if (state.hasPrivilegeChannel && !internal.value.isWorking) {
+            applyStatesideEnv(null)
+        } else if (!state.hasPrivilegeChannel) {
+            internal.update {
+                it.copy(
+                    toastBanner = "已设定自定义名称「$display」；完成上方本机无线调试绑定后即可生效"
+                )
+            }
+        }
+    }
+
+    fun updateSlotDisplayOverride(slotIndex: Int, rawOverride: String) {
+        prefs.setSlotDisplayOverride(slotIndex, rawOverride)
+        val state = uiState.value
+        if (state.hasPrivilegeChannel && !internal.value.isWorking) {
+            applyStatesideEnv(null)
+        } else if (!state.hasPrivilegeChannel) {
+            val tip = when {
+                rawOverride.isBlank() -> "卡 ${slotIndex + 1} 已恢复跟随全局模式"
+                rawOverride == UserPrefsRepository.SLOT_KEEP_NATIVE_TOKEN -> "卡 ${slotIndex + 1} 已设为保持原运营商（绑定无线调试后生效）"
+                else -> "卡 ${slotIndex + 1} 已设为显示「${rawOverride.trim()}」（绑定无线调试后生效）"
+            }
+            internal.update { it.copy(toastBanner = tip) }
+        }
+    }
+
     fun setAutoRestoreOnBoot(enabled: Boolean) {
         prefs.setAutoRestoreOnBoot(enabled)
     }
@@ -479,10 +510,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val subTm = baseTm.createForSubscriptionId(info.subscriptionId)
             val realIso = MccIsoResolver.resolveRealIsoFromMccMnc(subTm.simOperator)
             val currentIso = subTm.simCountryIso.orEmpty()
-            val currentName = subTm.simOperatorName.orEmpty().ifBlank {
-                info.carrierName?.toString().orEmpty()
+            // 优先读取 SubscriptionInfo.carrierName（即系统状态栏/控制中心实际裁决展示的名称，而非仅 EF_SPN）
+            val currentName = info.carrierName?.toString()?.trim().orEmpty().ifBlank {
+                subTm.simOperatorName.orEmpty()
             }
             SimCardUiModel(
+                slotIndex = info.simSlotIndex,
                 slotLabel = "卡 ${info.simSlotIndex + 1}",
                 realCountryLabel = MccIsoResolver.formatChineseCountryLabel(realIso),
                 currentReportedIso = currentIso.uppercase().ifBlank { "未知" },

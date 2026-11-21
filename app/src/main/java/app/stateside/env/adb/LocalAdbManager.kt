@@ -326,7 +326,9 @@ class LocalAdbManager private constructor(context: Context) : AbsAdbConnectionMa
                 val cmd = buildString {
                     append("am instrument -w --no-restart ")
                     append("-e action ").append(action.name).append(' ')
-                    append("-e carrier_id ").append(effectiveCarrier.id).append(' ')
+                    if (carrier != null) {
+                        append("-e carrier_id ").append(effectiveCarrier.id).append(' ')
+                    }
                     append("-e target_pkgs '").append(packagesToProcess).append("' ")
                     append("${appContext.packageName}/.privileged.StatesideEnvInstrumentation")
                 }

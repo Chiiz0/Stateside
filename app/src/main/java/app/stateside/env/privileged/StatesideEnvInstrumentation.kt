@@ -33,7 +33,11 @@ class StatesideEnvInstrumentation : Instrumentation() {
         val actionName = arguments.getString("action", PrivilegedAction.APPLY_US_ENV.name)
         val action = runCatching { PrivilegedAction.valueOf(actionName) }
             .getOrDefault(PrivilegedAction.APPLY_US_ENV)
-        val carrier = UsCarrierPreset.fromId(arguments.getString("carrier_id"))
+        val carrierArg = arguments.getString("carrier_id")?.takeIf { it.isNotBlank() }
+        val cliCarrier = carrierArg?.let { UsCarrierPreset.fromId(it) }
+        val cliSlot0Label = arguments.getString("slot0_label")
+        val cliSlot1Label = arguments.getString("slot1_label")
+        val savedSettings = UserPrefsRepository(ctx).settings.value
         val targetPkgs = arguments.getString("target_pkgs")
             ?.split(',')
             ?.map { it.trim() }
@@ -58,7 +62,13 @@ class StatesideEnvInstrumentation : Instrumentation() {
 
             when (action) {
                 PrivilegedAction.APPLY_US_ENV -> {
-                    val simResults = SimRegionOverrideEngine.applyUsCarrierToAllSims(ctx, carrier)
+                    val simResults = SimRegionOverrideEngine.applyUsCarrierToAllSims(
+                        context = ctx,
+                        settings = savedSettings,
+                        cliCarrierOverride = cliCarrier,
+                        cliSlot0Label = cliSlot0Label,
+                        cliSlot1Label = cliSlot1Label
+                    )
                     val updatedPkgs = AppEnglishLocaleEngine.applyUsEnglishToPackages(
                         context = ctx,
                         candidatePackages = targetPkgs,
@@ -69,13 +79,13 @@ class StatesideEnvInstrumentation : Instrumentation() {
                     val allSimsOk = simResults.isNotEmpty() && simResults.all { it.success }
                     val firstError = simResults.firstOrNull { !it.success }?.error.orEmpty()
 
+                    val carrierSummary = simResults.joinToString(" / ") {
+                        "卡${it.slotIndex + 1}:${it.currentCarrierName}"
+                    }
                     val summary = when {
                         hasNoSim -> "无插卡模式就绪，已将 ${updatedPkgs.size} 款已安装应用锁定为美国英语 (en-US)"
-                        allSimsOk && carrier.keepsOriginalCarrierName -> {
-                            "已将 ${simResults.size} 张电话卡区域设为美国 (US，保留原运营商显示)，并驱动 ${updatedPkgs.size} 款应用为美国英语"
-                        }
                         allSimsOk -> {
-                            "已将 ${simResults.size} 张电话卡切换为美国 ${carrier.carrierNameOverride}，并驱动 ${updatedPkgs.size} 款应用为美国英语"
+                            "已将 ${simResults.size} 张电话卡设为美国区域 ($carrierSummary)，并驱动 ${updatedPkgs.size} 款应用为美国英语"
                         }
                         else -> "部分卡槽覆盖未通过：$firstError"
                     }
@@ -91,7 +101,7 @@ class StatesideEnvInstrumentation : Instrumentation() {
                 }
 
                 PrivilegedAction.RESTORE_CN_DEFAULT -> {
-                    val simResults = SimRegionOverrideEngine.restoreAllSimsToRealCountry(ctx)
+                    val simResults = SimRegionOverrideEngine.restoreAllSimsToRealCountry(ctx, savedSettings)
                     val resetPkgs = AppEnglishLocaleEngine.resetPackagesToSystemDefault(
                         context = ctx,
                         candidatePackages = targetPkgs

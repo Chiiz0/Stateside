@@ -21,6 +21,14 @@ enum class UsCarrierPreset(
         countryIso = "us",
         sampleMccMnc = "310260"
     ),
+    CUSTOM(
+        id = "us_custom_carrier",
+        displayName = "美国 · 自定义运营商显示（如 X）",
+        chipLabel = "自定义（如 X）",
+        carrierNameOverride = "X",
+        countryIso = "us",
+        sampleMccMnc = "310260"
+    ),
     TMOBILE(
         id = "tmobile_us",
         displayName = "美国 · T-Mobile（同时覆盖运营商名）",

@@ -52,6 +52,8 @@ class MainActivity : ComponentActivity() {
                     onSafeLaunchApp = viewModel::safeLaunchTargetApp,
                     onRestoreDefault = viewModel::restoreToDomesticDefault,
                     onSelectCarrier = viewModel::selectCarrier,
+                    onApplyCustomCarrierLabel = viewModel::applyCustomCarrierLabel,
+                    onUpdateSlotDisplayOverride = viewModel::updateSlotDisplayOverride,
                     onToggleAutoBoot = viewModel::setAutoRestoreOnBoot,
                     onToggleCoreSuiteApp = viewModel::toggleCoreSuiteApp,
                     onOpenAppPicker = viewModel::loadSelectableUserAppsIfNeeded,

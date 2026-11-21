@@ -2,6 +2,17 @@
 
 本项目遵循 [语义化版本（Semantic Versioning）](https://semver.org/lang/zh-CN/) 与 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范。
 
+## [1.2.0] - 2026-11-20
+
+### 新增与突破（Added & Breakthrough — 一加 15 `PLK110` 全球通钻卡真机实测通过）
+- **攻克中国移动「全球通钻卡 / 白金卡 / 动感地带」5G SA 核心网 NITZ 尊享显标锁死状态栏难题**：
+  - 传统改卡工具（如 `Simlet`）仅覆盖 `carrier_name_string (EF_SPN)`，在开通了 5G 核心网尊享显标的号卡上会被基站实时下发的 `CellIdentityNr.mAlphaLong` 与 `rule=1 (showSpn=false, showPlmn=true)` 拦截，导致状态栏无法改名；
+  - 美境 `SimRegionOverrideEngine` 新增 **3GPP `EF_PNN`（`pnn_override_string_array`）+ `EF_OPL` 清空 + 等效归属网络（`ehplmn` + `force_home_network_bool`）+ `spn_display_condition_override_int = 1` + `config_carrier_support_nitz = false` + OEM PLMN 映射清空** 组合穿透机制，在 `CarrierDisplayNameResolver (CDNR)` 与 `OplusQSCarrierTextController` 层实现毫秒级改名生效。
+- **新增「分卡槽独立状态栏文案定制」与全局自定义名称（如卡 1 设为 `X`、卡 2 设为 `Zero` 或保留原名）**：
+  - 支持全局「保持原运营商（推荐）」、「自定义（如 `X`）」及美国主流运营商预设；
+  - 双卡机型每张电话卡卡片均支持点击 **「单独设卡 1 / 卡 2 显示名」**，互不干扰地独立指定任意自定义名称、保留原运营商或跟随全局模式；
+  - 主界面电话卡状态直接读取 `SubscriptionInfo.carrierName`（系统状态栏真实裁决结果），所见即所得。
+
 ## [1.1.2] - 2026-11-20
 
 ### 修复与增强（Fixed & Improved — 一加 15T / ColorOS 17 真机深度根因修复）

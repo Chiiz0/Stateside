@@ -27,8 +27,8 @@ android {
         applicationId = "app.stateside.env"
         minSdk = 34
         targetSdk = 36
-        versionCode = 112
-        versionName = "1.1.2"
+        versionCode = 120
+        versionName = "1.2.0"
     }
 
     signingConfigs {
