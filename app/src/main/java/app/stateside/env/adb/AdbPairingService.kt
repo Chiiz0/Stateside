@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 sealed interface PairingUiPhase {
@@ -38,7 +39,10 @@ sealed interface PairingUiPhase {
 class AdbPairingService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private var mdnsJob: Job? = null
+    private var radarJob: Job? = null
+
+    @Volatile
+    private var baselineDualStackPorts: Set<Int> = emptySet()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -56,7 +60,6 @@ class AdbPairingService : Service() {
                 stopSelf()
             }
             else -> {
-                // 防止空 Intent 重建时触发 ForegroundServiceDidNotStartInTimeException
                 promoteForegroundSafely(buildSearchingNotification())
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -75,61 +78,127 @@ class AdbPairingService : Service() {
         }
     }
 
+    private fun onPairingPortDetected(port: Int) {
+        if (port !in 1..65535) return
+        if (latestDetectedPort == port && _phase.value is PairingUiPhase.ReadyForCode) return
+        latestDetectedPort = port
+        _phase.value = PairingUiPhase.ReadyForCode(port)
+        val nm = getSystemService(NotificationManager::class.java)
+        nm?.notify(NOTIF_ID_PAIRING, buildCodeInputNotification(port))
+    }
+
     private fun startWatchingPairingPort() {
+        latestDetectedPort = 0
         _phase.value = PairingUiPhase.SearchingPairingDialog
         promoteForegroundSafely(buildSearchingNotification())
 
-        mdnsJob?.cancel()
-        mdnsJob = scope.launch {
-            AdbMdnsDiscovery.observeLocalPort(applicationContext, AdbMdnsType.TLS_PAIRING)
-                .distinctUntilChanged()
-                .collect { port ->
-                    latestDetectedPort = port
-                    _phase.value = PairingUiPhase.ReadyForCode(port)
-                    val nm = getSystemService(NotificationManager::class.java)
-                    nm?.notify(NOTIF_ID_PAIRING, buildCodeInputNotification(port))
+        radarJob?.cancel()
+        radarJob = scope.launch {
+            // 通道 1：标准 mDNS 监听（在已授予 Android 17 本地网络权限的常规 Wi-Fi 下即时响应）
+            launch {
+                AdbMdnsDiscovery.observeLocalPort(applicationContext, AdbMdnsType.TLS_PAIRING)
+                    .distinctUntilChanged()
+                    .collect { port ->
+                        onPairingPortDetected(port)
+                    }
+            }
+
+            // 通道 2：零权限内核回环双栈端口差分雷达（即使未授 Android 17 本地网络权限、开着 v2ray/Clash VPN 或校园网 AP 隔离也能自动识别弹窗端口！）
+            launch {
+                val initialPorts = AdbMdnsDiscovery.scanLocalDualStackCandidatePorts(applicationContext)
+                baselineDualStackPorts = initialPorts
+                while (isActive) {
+                    delay(1_200L)
+                    if (_phase.value is PairingUiPhase.PairingInProgress ||
+                        _phase.value is PairingUiPhase.PairedAndApplied
+                    ) {
+                        continue
+                    }
+                    val currentPorts = AdbMdnsDiscovery.scanLocalDualStackCandidatePorts(applicationContext)
+                    val newlyOpened = currentPorts - baselineDualStackPorts
+                    if (newlyOpened.size == 1) {
+                        onPairingPortDetected(newlyOpened.first())
+                    } else if (newlyOpened.size > 1 && latestDetectedPort !in newlyOpened) {
+                        onPairingPortDetected(newlyOpened.first())
+                    }
                 }
+            }
         }
     }
 
     private fun handleCodeSubmission(fallbackPort: Int, rawInput: String) {
-        val parsed = PairingInputParser.parse(rawInput, fallbackPort)
-        if (parsed == null) {
-            val hint = if (fallbackPort > 0) {
-                "配对码应为 6 位数字，请重新输入"
-            } else {
-                "尚未自动识别到弹窗端口，请先点开「使用配对码配对设备」，或直接输入「端口 6位配对码」（如 38941 123456）"
-            }
+        val parsedExplicit = PairingInputParser.parse(rawInput, fallbackPort)
+        val digitsOnly = rawInput.filter { it.isDigit() }
+
+        // 既没有解析出显式端口+配对码，也不是纯 6 位数字配对码时提示格式有误
+        if (parsedExplicit == null && digitsOnly.length != 6) {
+            val hint = "请输入屏幕上的 6 位数字配对码（如 184109）"
             _phase.value = PairingUiPhase.Failed(hint, fallbackPort)
             val errNotif = if (fallbackPort > 0) {
                 buildCodeInputNotification(fallbackPort, subtitleOverride = hint)
             } else {
                 buildSearchingNotification(subtitleOverride = hint)
             }
-            // 必须调用 startForeground 以满足 Android 14~17 startForegroundService 5 秒硬性要求
             promoteForegroundSafely(errNotif)
             return
         }
 
-        val port = parsed.port
-        latestDetectedPort = port
-        _phase.value = PairingUiPhase.PairingInProgress(port)
-        val progressNotif = buildProgressNotification("正在完成无线调试配对并开启美境环境…")
-        promoteForegroundSafely(progressNotif)
+        val cleanCode = parsedExplicit?.sixDigitCode ?: digitsOnly
+        val primaryPort = parsedExplicit?.port ?: 0
+
+        _phase.value = PairingUiPhase.PairingInProgress(primaryPort)
+        promoteForegroundSafely(buildProgressNotification("正在完成无线调试配对并自动开启美境…"))
 
         scope.launch {
             val nm = getSystemService(NotificationManager::class.java)
             val adb = LocalAdbManager.getInstance(applicationContext)
-            val pairResult = adb.pairWithCode(port, parsed.sixDigitCode)
-            if (pairResult.isFailure) {
-                val msg = pairResult.exceptionOrNull()?.message ?: "配对失败，请确认配对码未过期"
-                _phase.value = PairingUiPhase.Failed(msg, port)
-                nm?.notify(NOTIF_ID_PAIRING, buildCodeInputNotification(port, subtitleOverride = msg))
+
+            // 构建候选配对端口队列：首选已捕获/手填端口 -> 新增监听端口 -> 全量本机双栈监听端口自动盲配！
+            val candidatePorts = LinkedHashSet<Int>().apply {
+                if (primaryPort in 1..65535) {
+                    add(primaryPort)
+                }
+                val allDualStack = AdbMdnsDiscovery.scanLocalDualStackCandidatePorts(applicationContext)
+                // 优先尝试启动雷达后新出现的端口（即刚点开的配对弹窗端口）
+                addAll(allDualStack - baselineDualStackPorts)
+                // 再兜底尝试其余双栈端口（应对用户先点开弹窗、后启动雷达的场景）
+                addAll(allDualStack)
+            }
+
+            if (candidatePorts.isEmpty()) {
+                val msg = "未检测到打开中的配对码弹窗！请保持「无线调试 → 使用配对码配对设备」弹窗处于打开状态，再下拉通知栏输入 6 位数字。"
+                _phase.value = PairingUiPhase.Failed(msg, 0)
+                nm?.notify(NOTIF_ID_PAIRING, buildSearchingNotification(subtitleOverride = msg))
+                return@launch
+            }
+
+            var pairedSuccessPort = -1
+            var lastErrorMsg = "配对未通过，请确认 6 位配对码未过期且配对弹窗未关闭"
+
+            for (candidatePort in candidatePorts) {
+                val res = adb.pairWithCode(candidatePort, cleanCode)
+                if (res.isSuccess) {
+                    pairedSuccessPort = candidatePort
+                    latestDetectedPort = candidatePort
+                    break
+                } else {
+                    res.exceptionOrNull()?.message?.let { lastErrorMsg = it }
+                }
+            }
+
+            if (pairedSuccessPort <= 0) {
+                _phase.value = PairingUiPhase.Failed(lastErrorMsg, primaryPort)
+                val retryNotif = if (latestDetectedPort > 0 && AdbMdnsDiscovery.isLocalLoopbackPortListening(latestDetectedPort)) {
+                    buildCodeInputNotification(latestDetectedPort, subtitleOverride = lastErrorMsg)
+                } else {
+                    buildSearchingNotification(subtitleOverride = lastErrorMsg)
+                }
+                nm?.notify(NOTIF_ID_PAIRING, retryNotif)
                 return@launch
             }
 
             // 等待国产 ROM adbd 完成新配对公钥落盘重载后再发起 TLS 连接
-            delay(400L)
+            delay(450L)
 
             val applyResult = adb.runEnvironmentTask(PrivilegedAction.APPLY_US_ENV)
             if (applyResult.isSuccess) {
@@ -140,7 +209,7 @@ class AdbPairingService : Service() {
                 stopSelf()
             } else {
                 val err = applyResult.exceptionOrNull()?.message ?: "无线调试已配对成功，请点击查看最后一步开关设置"
-                _phase.value = PairingUiPhase.Failed(err, port)
+                _phase.value = PairingUiPhase.Failed(err, pairedSuccessPort)
                 nm?.notify(NOTIF_ID_RESULT, buildWarningNotification(err))
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -150,10 +219,10 @@ class AdbPairingService : Service() {
 
     private fun buildSearchingNotification(subtitleOverride: String? = null): Notification {
         val remoteInput = RemoteInput.Builder(KEY_REMOTE_PAIRING_CODE)
-            .setLabel("输入「端口 6位配对码」（如 38941 123456）")
+            .setLabel(getString(R.string.notif_input_hint))
             .build()
 
-        val manualSubmitPending = PendingIntent.getBroadcast(
+        val submitPending = PendingIntent.getBroadcast(
             this,
             5,
             Intent(this, PairingActionReceiver::class.java)
@@ -172,23 +241,23 @@ class AdbPairingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val manualReplyAction = Notification.Action.Builder(
+        val replyAction = Notification.Action.Builder(
             null,
-            "手填端口与配对码",
-            manualSubmitPending
+            getString(R.string.notif_action_submit),
+            submitPending
         ).addRemoteInput(remoteInput).build()
 
         return Notification.Builder(this, StatesideApp.CHANNEL_PAIRING)
             .setSmallIcon(R.drawable.ic_stat_stateside)
-            .setContentTitle("美境激活：请点开「使用配对码配对设备」")
+            .setContentTitle("美境激活：点开配对弹窗后直接在此输入 6 位配对码")
             .setContentText(
                 subtitleOverride
-                    ?: "自动扫描弹窗中；若校园网/VPN 拦截扫描，可直接点下方按钮输入「端口 配对码」"
+                    ?: "请在无线调试中点开「使用配对码配对设备」，保持弹窗不关，直接点下方「提交配对码」填入 6 位数字"
             )
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOngoing(true)
-            .addAction(manualReplyAction)
+            .addAction(replyAction)
             .addAction(Notification.Action.Builder(null, getString(R.string.notif_action_stop), stopPending).build())
             .build()
     }
@@ -227,8 +296,8 @@ class AdbPairingService : Service() {
 
         return Notification.Builder(this, StatesideApp.CHANNEL_PAIRING)
             .setSmallIcon(R.drawable.ic_stat_stateside)
-            .setContentTitle("已识别配对弹窗（端口 $port）")
-            .setContentText(subtitleOverride ?: "请点击下方「提交配对码」，直接填入屏幕上的 6 位数字")
+            .setContentTitle("已锁定配对弹窗（端口 $port）")
+            .setContentText(subtitleOverride ?: "保持配对码弹窗开启，点击下方「提交配对码」填入 6 位数字即可完成激活")
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setCategory(Notification.CATEGORY_STATUS)
             .setOngoing(true)
@@ -280,7 +349,7 @@ class AdbPairingService : Service() {
     }
 
     override fun onDestroy() {
-        mdnsJob?.cancel()
+        radarJob?.cancel()
         scope.cancel()
         super.onDestroy()
     }

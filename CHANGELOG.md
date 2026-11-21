@@ -2,6 +2,13 @@
 
 本项目遵循 [语义化版本（Semantic Versioning）](https://semver.org/lang/zh-CN/) 与 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范。
 
+## [1.1.1] - 2026-11-20
+
+### 修复与增强（Fixed & Improved — Android 17 / ColorOS 17 真机实测修复）
+- **修复 Android 17 (API 37) `ACCESS_LOCAL_NETWORK` 本地网络权限拦截**：修复 `targetSdk = 36` 在 Android 17 真机（如一加 15T ColorOS 17）上因未弹出 `ACCESS_LOCAL_NETWORK` 授权框导致 `NsdManager` 被 `AppOps: ignore` 静默屏蔽、无法自动捕获无线调试配对弹窗端口的问题。
+- **新增零权限内核双栈端口差分雷达与自动盲配引擎**：无需依赖 mDNS（不受本地网络权限、全局 VPN `tun` 或校园网 AP 隔离影响），自动通过回环双栈端口差分锁定配对弹窗端口；用户仅在通知栏填入 6 位数字配对码即可自动遍历候选端口完成绑定与重连。
+- **修复「美境实际已生效但顶部卡片仍显示未激活」状态不同步问题**：当手机双卡已处于美区状态（如通过电脑 USB ADB 触发）而本机无线调试尚未配对时，顶部主控卡片准确展示「美境已生效（待绑定本机无线调试）」并直接开放安全快启坞。
+
 ## [1.1.0] - 2026-11-20
 
 ### 新增（Added）

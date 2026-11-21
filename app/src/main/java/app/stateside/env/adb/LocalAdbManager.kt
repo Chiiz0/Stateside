@@ -76,9 +76,23 @@ class LocalAdbManager private constructor(context: Context) : AbsAdbConnectionMa
                 require(port in 1..65535) { "未检测到有效的无线调试配对端口，请确认已点开「使用配对码配对设备」弹窗（校园网/VPN 环境可同时输入「端口 配对码」）" }
 
                 runCatching { disconnect() }
-                val paired = pair(LOOPBACK_HOST, port, cleanCode)
+                val pairedLoopback = runCatching {
+                    pair(LOOPBACK_HOST, port, cleanCode)
+                }.getOrDefault(false)
+
+                val paired = if (pairedLoopback) {
+                    true
+                } else {
+                    val wifiHost = AdbMdnsDiscovery.getActiveWifiIpv4(appContext)?.hostAddress
+                    if (!wifiHost.isNullOrBlank()) {
+                        runCatching { pair(wifiHost, port, cleanCode) }.getOrDefault(false)
+                    } else {
+                        false
+                    }
+                }
+
                 if (!paired) {
-                    error("配对未通过，请确认 6 位配对码未过期并重新点开配对弹窗")
+                    error("配对未通过，请确认 6 位配对码未过期并保持配对弹窗开启")
                 }
                 val repo = UserPrefsRepository(appContext)
                 repo.markAdbPaired(true)
@@ -144,8 +158,8 @@ class LocalAdbManager private constructor(context: Context) : AbsAdbConnectionMa
                     }
                 }
 
-                // 4. 本机 mDNS 自动发现 _adb-tls-connect._tcp 端口（带重试容忍首次配对后 adbd 重载证书延迟）
-                val discoveredPort = withTimeoutOrNull(timeoutMs) {
+                // 4. 本机 mDNS 自动发现 _adb-tls-connect._tcp 端口（设定 2.5s 快速窗口，若因 Android 17 本地网络未授权或 VPN 拦截未返回则立即切入内核双栈扫描）
+                val discoveredPort = withTimeoutOrNull(timeoutMs.coerceAtMost(2_500L)) {
                     AdbMdnsDiscovery.observeLocalPort(appContext, AdbMdnsType.TLS_CONNECT).first()
                 }
                 if (discoveredPort != null && discoveredPort in 1..65535) {
@@ -154,7 +168,21 @@ class LocalAdbManager private constructor(context: Context) : AbsAdbConnectionMa
                     }
                 }
 
-                // 5. 经典 adb tcpip 5555 兜底（无需 Wi-Fi、蜂窝流量下亦可用）
+                // 5. 零权限内核回环双栈端口扫描兜底（无需 mDNS、不受 Android 17 ACCESS_LOCAL_NETWORK 或 VPN 限制，毫秒级定位 *:port 无线调试端口）
+                val dualStackCandidates = AdbMdnsDiscovery.scanLocalDualStackCandidatePorts(appContext)
+                setTimeout(2, TimeUnit.SECONDS)
+                try {
+                    for (candidatePort in dualStackCandidates) {
+                        if (candidatePort == discoveredPort) continue
+                        if (tryConnectLoopbackPort(candidatePort, retries = 1)) {
+                            return@runCatching
+                        }
+                    }
+                } finally {
+                    setTimeout(6, TimeUnit.SECONDS)
+                }
+
+                // 6. 经典 adb tcpip 5555 兜底（无需 Wi-Fi、蜂窝流量下亦可用）
                 if (AdbMdnsDiscovery.isLocalLoopbackPortListening(DEFAULT_TCP_ADB_PORT)) {
                     if (tryConnectLoopbackPort(DEFAULT_TCP_ADB_PORT, retries = 1)) {
                         return@runCatching

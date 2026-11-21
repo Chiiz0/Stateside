@@ -34,7 +34,8 @@ class MainActivity : ComponentActivity() {
                 val perms = buildList {
                     add(Manifest.permission.READ_PHONE_STATE)
                     add(Manifest.permission.POST_NOTIFICATIONS)
-                    if (Build.VERSION.SDK_INT >= 37 && applicationInfo.targetSdkVersion >= 37) {
+                    // Android 17 (API 37) 对声明了 ACCESS_LOCAL_NETWORK 的应用强制校验本地网络运行时权限（不论 targetSdk 是否为 36）
+                    if (Build.VERSION.SDK_INT >= 37) {
                         add("android.permission.ACCESS_LOCAL_NETWORK")
                     }
                 }

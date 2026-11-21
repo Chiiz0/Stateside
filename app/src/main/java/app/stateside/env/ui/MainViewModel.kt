@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.os.Build
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
@@ -68,6 +69,7 @@ data class DockAppUiItem(
 data class MainUiState(
     val hasPhonePermission: Boolean = false,
     val hasNotificationPermission: Boolean = false,
+    val hasLocalNetworkPermission: Boolean = true,
     val hasRootAccess: Boolean = false,
     val currentBootCount: Int = -1,
     val simCards: List<SimCardUiModel> = emptyList(),
@@ -85,12 +87,15 @@ data class MainUiState(
     val hasPrivilegeChannel: Boolean
         get() = hasRootAccess || userSettings.isAdbPaired
 
+    val areSimsAlreadyReportingUs: Boolean
+        get() = hasPhonePermission && simCards.isNotEmpty() && simCards.all { it.isUsSpoofActive }
+
     val isEnvironmentReady: Boolean
-        get() = userSettings.isReadyForCurrentSession(
+        get() = areSimsAlreadyReportingUs || userSettings.isReadyForCurrentSession(
             hasPrivilegeChannel = hasPrivilegeChannel,
             hasPhonePermission = hasPhonePermission,
             simCardsCount = simCards.size,
-            allSimsUsSpoofed = simCards.isNotEmpty() && simCards.all { it.isUsSpoofActive },
+            allSimsUsSpoofed = areSimsAlreadyReportingUs,
             currentBootCount = currentBootCount
         )
 
@@ -114,6 +119,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private data class InternalState(
         val hasPhonePerm: Boolean = false,
         val hasNotifPerm: Boolean = false,
+        val hasLocalNetPerm: Boolean = true,
         val hasRoot: Boolean = false,
         val bootCount: Int = -1,
         val simCards: List<SimCardUiModel> = emptyList(),
@@ -155,6 +161,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         MainUiState(
             hasPhonePermission = local.hasPhonePerm,
             hasNotificationPermission = local.hasNotifPerm,
+            hasLocalNetworkPermission = local.hasLocalNetPerm,
             hasRootAccess = local.hasRoot,
             currentBootCount = local.bootCount,
             simCards = local.simCards,
@@ -194,6 +201,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
 
+            val hasLocalNet = if (Build.VERSION.SDK_INT >= 37) {
+                ContextCompat.checkSelfPermission(
+                    app,
+                    "android.permission.ACCESS_LOCAL_NETWORK"
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+
             val bootCount = UserPrefsRepository.readCurrentBootCount(app)
             val hasRoot = LocalAdbManager.getInstance(app).detectRootAccess()
 
@@ -221,6 +237,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 it.copy(
                     hasPhonePerm = hasPhone,
                     hasNotifPerm = hasNotif,
+                    hasLocalNetPerm = hasLocalNet,
                     hasRoot = hasRoot,
                     bootCount = bootCount,
                     simCards = sims,

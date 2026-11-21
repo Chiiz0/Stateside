@@ -141,7 +141,7 @@ fun MainScreen(
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (!state.hasPhonePermission || !state.hasNotificationPermission) {
+            if (!state.hasPhonePermission || !state.hasNotificationPermission || !state.hasLocalNetworkPermission) {
                 OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.padding(14.dp),
@@ -155,12 +155,12 @@ fun MainScreen(
                         Spacer(Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "授予双卡状态读取与通知权限",
+                                text = "授予双卡状态、通知与本地网络权限",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "用于精准校验双卡 US 状态，并在首次激活时直接在通知栏提交 6 位配对码。",
+                                text = "用于校验双卡 US 状态，并在 Android 17 真机上自动识别无线调试端口与通知栏提交配对码。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -622,8 +622,8 @@ private fun HeroWorkspaceCard(
     onSafeLaunchApp: (String) -> Unit
 ) {
     val containerColor = when {
-        !state.hasPrivilegeChannel -> MaterialTheme.colorScheme.primaryContainer
         state.isEnvironmentReady -> MaterialTheme.colorScheme.secondaryContainer
+        !state.hasPrivilegeChannel -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.tertiaryContainer
     }
 
@@ -645,8 +645,9 @@ private fun HeroWorkspaceCard(
                 Column {
                     Text(
                         text = when {
+                            state.isEnvironmentReady && state.hasPrivilegeChannel -> "美境生效中（US · English）"
+                            state.isEnvironmentReady && !state.hasPrivilegeChannel -> "美境已生效（待绑定本机无线调试）"
                             !state.hasPrivilegeChannel -> "欢迎进入美境 · 首次仅需 1 分钟激活"
-                            state.isEnvironmentReady -> "美境生效中（US · English）"
                             else -> "待一键开启美境"
                         },
                         style = MaterialTheme.typography.titleLarge,
@@ -654,11 +655,14 @@ private fun HeroWorkspaceCard(
                     )
                     Text(
                         text = when {
-                            !state.hasPrivilegeChannel -> "免装 Shizuku 等极客插件，完成一次本机无线调试绑定即可一键驱动美区卡与全套英语应用"
-                            state.isEnvironmentReady -> {
+                            state.isEnvironmentReady && state.hasPrivilegeChannel -> {
                                 val channelTag = if (state.hasRootAccess) "Root 直通" else "本机无线调试"
                                 "通道：$channelTag · 电话卡已模拟美国 ${state.userSettings.selectedCarrier.carrierNameOverride}，英语应用组已就绪"
                             }
+                            state.isEnvironmentReady && !state.hasPrivilegeChannel -> {
+                                "双卡与英语应用当前已处于美区状态；建议完成一次本机无线调试配对，以便拔掉电脑数据线或日后手机重启时也能在手机上独立一键恢复"
+                            }
+                            !state.hasPrivilegeChannel -> "免装 Shizuku 等极客插件，完成一次本机无线调试绑定即可一键驱动美区卡与全套英语应用"
                             state.hasRootAccess -> "已检测到本机 Root 免配对通道，点击下方按钮立即驱动美境环境"
                             else -> "点击下方按钮即可自动重连本机无线调试，2 秒内切换为美区电话卡与英语环境"
                         },
@@ -686,7 +690,36 @@ private fun HeroWorkspaceCard(
                         .fillMaxWidth()
                         .height(54.dp)
                 ) {
-                    Text("开始 1 分钟首次激活", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = if (state.isEnvironmentReady) "绑定本机无线调试（脱离电脑独立使用）" else "开始 1 分钟首次激活",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+
+                val dockItems = state.safeLaunchDockItems
+                if (state.isEnvironmentReady && dockItems.isNotEmpty()) {
+                    Text(
+                        text = "安全快启坞（当前美区环境已就绪）：",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        dockItems.forEach { item ->
+                            FilledTonalButton(
+                                onClick = { onSafeLaunchApp(item.packageName) }
+                            ) {
+                                InstalledAppIcon(
+                                    packageName = item.packageName,
+                                    size = 18.dp,
+                                    modifier = Modifier.padding(end = 6.dp)
+                                )
+                                Text(item.title)
+                            }
+                        }
+                    }
                 }
             } else {
                 Button(
