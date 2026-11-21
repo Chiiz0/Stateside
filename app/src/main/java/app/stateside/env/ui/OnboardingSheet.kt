@@ -2,14 +2,18 @@ package app.stateside.env.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -43,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -92,23 +97,30 @@ fun OnboardingSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Text(
-                text = "美境 1 分钟首次激活向导（免电脑 · 免 Root）",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "已自动识别您的手机：${romGuide.brandTitle}。只需首次完成一次本机无线调试绑定，后续即可一键驱动美区电话卡与 TikTok、X、Claude、ChatGPT 英语环境。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val horizontalPad = if (maxWidth < 365.dp) 14.dp else 20.dp
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 600.dp)
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(horizontal = horizontalPad, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "无线调试首次激活向导",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "免电脑 · 免 Root · 已适配 ${romGuide.brandTitle}。绑定一次后日常即可在手机上独立一键秒开。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
             if (!hasNotificationPermission) {
                 Card(
@@ -141,16 +153,24 @@ fun OnboardingSheet(
                                 ChineseRomGuide.openAppNotificationSettings(context)
                             }
                         ) {
-                            Text("去开启")
+                            Text("去开启", softWrap = false, maxLines = 1)
                         }
                     }
                 }
             }
 
+            val tipContainerColor = if (romGuide.requiresExtraSecurityToggle) {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.75f)
+            } else {
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.75f)
+            }
+            val tipContentColor = if (romGuide.requiresExtraSecurityToggle) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                MaterialTheme.colorScheme.onSecondaryContainer
+            }
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.75f)
-                ),
+                colors = CardDefaults.cardColors(containerColor = tipContainerColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -158,9 +178,9 @@ fun OnboardingSheet(
                     verticalAlignment = Alignment.Top
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Warning,
+                        imageVector = if (romGuide.requiresExtraSecurityToggle) Icons.Default.Warning else Icons.Default.Info,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onErrorContainer
+                        tint = tipContentColor
                     )
                     Spacer(Modifier.width(10.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -168,12 +188,12 @@ fun OnboardingSheet(
                             text = romGuide.criticalExtraToggleTitle,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            color = tipContentColor
                         )
                         Text(
                             text = romGuide.criticalExtraToggleDesc,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            color = tipContentColor
                         )
                     }
                 }
@@ -218,11 +238,13 @@ fun OnboardingSheet(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .heightIn(min = 50.dp)
             ) {
                 Text(
                     text = if (devEnabled) "启动配对雷达并跳转「无线调试」" else "去开启「开发者选项」并启动雷达",
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -291,7 +313,7 @@ fun OnboardingSheet(
                         HorizontalDivider()
 
                         Text(
-                            text = "方式 B：已配对设备直接连接并开启美境（可选填无线调试主页显示的端口，留空则自动扫描）",
+                            text = "方式 B：已配对设备直接连接并开启美境（可留空自动识别端口）",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -302,16 +324,23 @@ fun OnboardingSheet(
                             OutlinedTextField(
                                 value = manualConnectPort,
                                 onValueChange = { manualConnectPort = it.filter(Char::isDigit).take(5) },
-                                label = { Text("连接端口（可留空自动识别）") },
+                                label = {
+                                    Text(
+                                        text = "连接端口（可留空）",
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.weight(1f)
                             )
                             Button(
                                 enabled = !isWorking,
-                                onClick = { onConnectManualPortAndApply(manualConnectPort) }
+                                onClick = { onConnectManualPortAndApply(manualConnectPort) },
+                                modifier = Modifier.heightIn(min = 48.dp)
                             ) {
-                                Text("直接连接")
+                                Text("直接连接", softWrap = false, maxLines = 1)
                             }
                         }
                     }
@@ -320,12 +349,15 @@ fun OnboardingSheet(
 
             FilledTonalButton(
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 46.dp)
             ) {
-                Text("关闭向导")
+                Text("关闭向导", maxLines = 1)
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            }
         }
     }
 }
@@ -433,9 +465,10 @@ private fun PairingRadarPanel(
                         )
                         Button(
                             enabled = manualCode.length == 6,
-                            onClick = { onSubmitManualCode(phase.pairingPort) }
+                            onClick = { onSubmitManualCode(phase.pairingPort) },
+                            modifier = Modifier.heightIn(min = 48.dp)
                         ) {
-                            Text("立即配对")
+                            Text("立即配对", softWrap = false, maxLines = 1)
                         }
                     }
                 }

@@ -13,6 +13,7 @@ data class RomSetupGuide(
     val criticalExtraToggleTitle: String,
     val criticalExtraToggleDesc: String,
     val keepAliveTip: String,
+    val requiresExtraSecurityToggle: Boolean = true,
     val isUnsupportedHarmonyWarning: Boolean = false
 )
 
@@ -35,13 +36,26 @@ object ChineseRomGuide {
                 keepAliveTip = "日常请勿使用「手机管家 → 一键优化/体检」，该功能会自动关闭开发者选项。"
             )
 
-            brand.contains("oppo") || brand.contains("oneplus") || brand.contains("realme") -> RomSetupGuide(
-                brandTitle = "OPPO / 一加 / 真我（ColorOS）",
-                buildNumberPath = "设置 → 关于本机 → 版本信息 → 连续点击 7 次「版本号」",
-                criticalExtraToggleTitle = "必开开关：禁止权限监控",
-                criticalExtraToggleDesc = "进入「开发者选项」后，请先滑到页面最底部，开启「禁止权限监控」，然后再打开「无线调试」，否则特权委托会被系统拦截。",
-                keepAliveTip = "建议在应用详情「耗电管理」中设为「允许完全后台行为」，保障重启自动恢复美境。"
-            )
+            brand.contains("oppo") || brand.contains("oneplus") || brand.contains("realme") -> {
+                if (Build.VERSION.SDK_INT >= 36) {
+                    RomSetupGuide(
+                        brandTitle = "OPPO / 一加 / 真我（ColorOS 16 / 17）",
+                        buildNumberPath = "设置 → 关于本机 → 版本信息 → 连续点击 7 次「版本号」",
+                        criticalExtraToggleTitle = "仅需开启「无线调试」（ColorOS 16/17 免额外开关）",
+                        criticalExtraToggleDesc = "ColorOS 16 / 17 已移除旧版「禁止权限监控」并原生支持无线调试特权委托，直接开启「无线调试」（勾选始终允许在此网络上调试）即可！",
+                        keepAliveTip = "建议在应用详情「耗电管理」中设为「允许完全后台行为」，保障重启自动恢复美境。",
+                        requiresExtraSecurityToggle = false
+                    )
+                } else {
+                    RomSetupGuide(
+                        brandTitle = "OPPO / 一加 / 真我（ColorOS 14 / 15）",
+                        buildNumberPath = "设置 → 关于本机 → 版本信息 → 连续点击 7 次「版本号」",
+                        criticalExtraToggleTitle = "若遇权限拦截：开启底部「禁止权限监控」",
+                        criticalExtraToggleDesc = "旧版 ColorOS 14 / 15 若提示权限委托被拦截，可滑到「开发者选项」最底部开启「禁止权限监控」（若您的系统无此项说明已原生免开）。",
+                        keepAliveTip = "建议在应用详情「耗电管理」中设为「允许完全后台行为」，保障重启自动恢复美境。"
+                    )
+                }
+            }
 
             brand.contains("vivo") || brand.contains("iqoo") -> RomSetupGuide(
                 brandTitle = "vivo / iQOO（OriginOS）",
@@ -81,7 +95,8 @@ object ChineseRomGuide {
                 buildNumberPath = "设置 → 关于手机 → 连续点击 7 次「版本号」",
                 criticalExtraToggleTitle = "开启「无线调试」",
                 criticalExtraToggleDesc = "进入「设置 → 系统 → 开发者选项 → 无线调试」，打开开关并点击「使用配对码配对设备」。",
-                keepAliveTip = "配对时勾选「始终允许在此网络上调试」，后续即可一键秒开。"
+                keepAliveTip = "配对时勾选「始终允许在此网络上调试」，后续即可一键秒开。",
+                requiresExtraSecurityToggle = false
             )
         }
     }

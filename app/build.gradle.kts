@@ -27,8 +27,8 @@ android {
         applicationId = "app.stateside.env"
         minSdk = 34
         targetSdk = 36
-        versionCode = 111
-        versionName = "1.1.1"
+        versionCode = 112
+        versionName = "1.1.2"
     }
 
     signingConfigs {
@@ -112,9 +112,8 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
 
-    // 本机 127.0.0.1 无线调试 ADB 客户端与 TLS 1.3 + SPAKE2 配对支持（彻底去除外部 Shizuku App 依赖）
+    // 本机 127.0.0.1 无线调试 ADB 客户端与 Android 14~17 系统原生 Conscrypt TLS 1.3 + SPAKE2 配对支持
     implementation(libs.libadb.android)
-    implementation(libs.conscrypt.android)
     implementation(libs.bouncycastle.prov)
 
     // Android 14 ~ 17 系统隐藏 API 豁免（用于反射调用 CarrierConfigManager.overrideConfig 与 ILocaleManager）

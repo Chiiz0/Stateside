@@ -99,6 +99,17 @@ data class MainUiState(
             currentBootCount = currentBootCount
         )
 
+    val unconfirmedEnglishAppsCount: Int
+        get() {
+            val unconfirmedCore = coreSuiteItems.count {
+                it.installedPackage != null && it.isEnabled && !it.isEnglishConfirmed
+            }
+            val unconfirmedExtra = extraAppItems.count {
+                it.isInstalled && !it.isEnglishConfirmed
+            }
+            return unconfirmedCore + unconfirmedExtra
+        }
+
     val safeLaunchDockItems: List<DockAppUiItem>
         get() {
             val coreDock = coreSuiteItems
@@ -366,7 +377,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * 若美境已生效则直接毫秒级打开；若因重启未生效则先自动补写美境再打开该应用。
      */
     fun safeLaunchTargetApp(packageName: String) {
-        if (uiState.value.isEnvironmentReady) {
+        val state = uiState.value
+        val needsEnglishInit = packageName in state.userSettings.effectiveEnglishPackages() &&
+            packageName !in state.userSettings.confirmedEnglishPackages
+        if (state.isEnvironmentReady && !needsEnglishInit) {
             AppLaunchGuardHelper.launchPackageDirectly(app, packageName)
         } else {
             applyStatesideEnv(packageToLaunchAfter = packageName)
@@ -412,6 +426,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectCarrier(preset: UsCarrierPreset) {
         prefs.setSelectedCarrier(preset)
+        val state = uiState.value
+        if (state.hasPrivilegeChannel && !internal.value.isWorking) {
+            applyStatesideEnv(null)
+        } else if (!state.hasPrivilegeChannel) {
+            internal.update {
+                it.copy(
+                    toastBanner = "已选定「${preset.chipLabel}」；完成上方本机无线调试绑定后即可一键生效"
+                )
+            }
+        }
     }
 
     fun setAutoRestoreOnBoot(enabled: Boolean) {

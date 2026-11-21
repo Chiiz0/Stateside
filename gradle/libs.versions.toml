@@ -7,7 +7,6 @@ activityCompose = "1.10.0"
 composeBom = "2025.02.00"
 coroutines = "1.10.1"
 libadb = "3.1.1"
-conscrypt = "2.5.3"
 bouncycastle = "1.81"
 hiddenapibypass = "6.1"
 junit = "4.13.2"
@@ -26,7 +25,6 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 libadb-android = { group = "com.github.MuntashirAkon", name = "libadb-android", version.ref = "libadb" }
-conscrypt-android = { group = "org.conscrypt", name = "conscrypt-android", version.ref = "conscrypt" }
 bouncycastle-prov = { group = "org.bouncycastle", name = "bcprov-jdk15to18", version.ref = "bouncycastle" }
 hiddenapibypass = { group = "org.lsposed.hiddenapibypass", name = "hiddenapibypass", version.ref = "hiddenapibypass" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

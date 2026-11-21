@@ -13,11 +13,12 @@ class PairingActionReceiver : BroadcastReceiver() {
                 val code = results?.getCharSequence(AdbPairingService.KEY_REMOTE_PAIRING_CODE)
                     ?.toString()
                     .orEmpty()
-                val port = intent.getIntExtra(
-                    AdbPairingService.EXTRA_PORT,
-                    AdbPairingService.latestDetectedPort
-                )
-                AdbPairingService.submitCodeFromUi(context, port, code)
+                val extraPort = intent.getIntExtra(AdbPairingService.EXTRA_PORT, 0)
+                val port = if (extraPort in 1..65535) extraPort else AdbPairingService.latestDetectedPort
+                val host = intent.getStringExtra(AdbPairingService.EXTRA_HOST)
+                    ?.takeIf { it.isNotBlank() }
+                    ?: AdbPairingService.latestDetectedHost
+                AdbPairingService.submitCodeFromUi(context, port, code, host)
             }
             AdbPairingService.ACTION_STOP -> {
                 AdbPairingService.stopWatching(context)

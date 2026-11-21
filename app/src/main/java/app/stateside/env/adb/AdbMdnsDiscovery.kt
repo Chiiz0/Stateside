@@ -5,14 +5,10 @@ import android.net.ConnectivityManager
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.map
 import java.io.IOException
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -26,16 +22,36 @@ enum class AdbMdnsType(val serviceType: String) {
     TLS_CONNECT("_adb-tls-connect._tcp")
 }
 
+data class AdbEndpoint(
+    val host: String,
+    val port: Int
+)
+
 object AdbMdnsDiscovery {
 
-    private val ipv4Loopback: InetAddress by lazy { InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)) }
+    // 使用进程级共享守护单线程 Executor（切勿在 awaitClose 中调用 shutdownNow！
+    // Android 14~17 的 NsdManager.unregisterServiceInfoCallback 是异步 IPC，注销后仍会在 ConnectivityThread
+    // 回调 onServiceInfoCallbackUnregistered()，若提前 shutdown Executor 会抛出 RejectedExecutionException 崩溃！）
+    private val nsdCallbackExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "stateside-nsd-cb").apply { isDaemon = true }
+    }
+    private val safeExecutor = java.util.concurrent.Executor { command ->
+        runCatching { nsdCallbackExecutor.execute(command) }
+    }
+
+    private val ipv4Loopback: InetAddress by lazy {
+        InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
+    }
     private val ipv6Loopback: InetAddress by lazy {
         InetAddress.getByAddress(
             byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
         )
     }
 
-    fun observeLocalPort(context: Context, type: AdbMdnsType): Flow<Int> = callbackFlow {
+    fun observeLocalPort(context: Context, type: AdbMdnsType): Flow<Int> =
+        observeLocalEndpoint(context, type).map { it.port }
+
+    fun observeLocalEndpoint(context: Context, type: AdbMdnsType): Flow<AdbEndpoint> = callbackFlow {
         val appCtx = context.applicationContext
         val nsdManager = appCtx.getSystemService(NsdManager::class.java)
         if (nsdManager == null) {
@@ -49,7 +65,6 @@ object AdbMdnsDiscovery {
             runCatching { acquire() }
         }
 
-        val executor = Executors.newSingleThreadExecutor()
         val activeCallbacks = mutableListOf<NsdManager.ServiceInfoCallback>()
 
         val discoveryListener = object : NsdManager.DiscoveryListener {
@@ -67,7 +82,13 @@ object AdbMdnsDiscovery {
                     override fun onServiceUpdated(updatedInfo: NsdServiceInfo) {
                         val port = updatedInfo.port
                         if (port in 1..65535 && isOwnDeviceService(appCtx, updatedInfo, port)) {
-                            trySend(port)
+                            val resolvedHost = updatedInfo.hostAddresses
+                                .filterIsInstance<Inet4Address>()
+                                .firstOrNull { !it.isLoopbackAddress }
+                                ?.hostAddress
+                                ?: getActiveWifiIpv4(appCtx)?.hostAddress
+                                ?: "127.0.0.1"
+                            trySend(AdbEndpoint(host = resolvedHost, port = port))
                         }
                     }
                     override fun onServiceLost() = Unit
@@ -77,7 +98,7 @@ object AdbMdnsDiscovery {
                     activeCallbacks.add(infoCallback)
                 }
                 runCatching {
-                    nsdManager.registerServiceInfoCallback(serviceInfo, executor, infoCallback)
+                    nsdManager.registerServiceInfoCallback(serviceInfo, safeExecutor, infoCallback)
                 }
             }
         }
@@ -97,7 +118,6 @@ object AdbMdnsDiscovery {
             runCatching {
                 if (multicastLock?.isHeld == true) multicastLock.release()
             }
-            executor.shutdownNow()
         }
     }
 
@@ -125,52 +145,6 @@ object AdbMdnsDiscovery {
         if (port !in 1..65535) return false
         if (isAddressPortBound(ipv4Loopback, port)) return true
         return isAddressPortBound(ipv6Loopback, port)
-    }
-
-    /**
-     * 零权限内核端口占用扫描雷达（专治 Android 17 ACCESS_LOCAL_NETWORK 未授权、VPN tun 拦截组播、校园网 AP 隔离）：
-     * 优先排列同时占用 127.0.0.1 与 ::1 的双栈通配端口（*:port / [::]:port，即系统 adbd 与配对弹窗标准监听方式），
-     * 其次包含仅占用 0.0.0.0 / Wi-Fi 局域网 IP 的监听端口，全量扫描仅需约 80~150ms。
-     */
-    suspend fun scanLocalDualStackCandidatePorts(
-        context: Context? = null,
-        startPort: Int = 30000,
-        endPort: Int = 65535,
-        parallelism: Int = 8
-    ): Set<Int> = withContext(Dispatchers.IO) {
-        val wifiInet4 = context?.let { getActiveWifiIpv4(it) }
-        coroutineScope {
-            val total = endPort - startPort + 1
-            val chunkSize = (total + parallelism - 1) / parallelism
-            val chunks = (0 until parallelism).map { workerIdx ->
-                val chunkStart = startPort + workerIdx * chunkSize
-                val chunkEnd = (chunkStart + chunkSize - 1).coerceAtMost(endPort)
-                async {
-                    val dualStack = ArrayList<Int>(4)
-                    val singleStack = ArrayList<Int>(4)
-                    if (chunkStart <= chunkEnd) {
-                        for (port in chunkStart..chunkEnd) {
-                            val v4Bound = isAddressPortBound(ipv4Loopback, port)
-                            if (v4Bound) {
-                                if (isAddressPortBound(ipv6Loopback, port)) {
-                                    dualStack.add(port)
-                                } else {
-                                    singleStack.add(port)
-                                }
-                            } else if (wifiInet4 != null && isAddressPortBound(wifiInet4, port)) {
-                                singleStack.add(port)
-                            }
-                        }
-                    }
-                    dualStack to singleStack
-                }
-            }.awaitAll()
-
-            LinkedHashSet<Int>().apply {
-                chunks.forEach { addAll(it.first) }
-                chunks.forEach { addAll(it.second) }
-            }
-        }
     }
 
     fun getActiveWifiIpv4(context: Context): Inet4Address? = runCatching {

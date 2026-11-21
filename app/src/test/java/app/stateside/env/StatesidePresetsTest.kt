@@ -49,8 +49,12 @@ class StatesidePresetsTest {
         assertEquals("中国电信", MccIsoResolver.resolveCarrierDisplayName("46011"))
         assertEquals("中国广电", MccIsoResolver.resolveCarrierDisplayName("46015"))
         val preset = UsCarrierPreset.fromId(null)
-        assertEquals(UsCarrierPreset.TMOBILE, preset)
+        assertEquals(UsCarrierPreset.US_KEEP_CARRIER, preset)
+        assertTrue(preset.keepsOriginalCarrierName)
+        assertEquals("", preset.carrierNameOverride)
         assertEquals("us", preset.countryIso)
+        assertEquals(UsCarrierPreset.TMOBILE, UsCarrierPreset.fromId("tmobile_us"))
+        assertFalse(UsCarrierPreset.TMOBILE.keepsOriginalCarrierName)
         assertEquals("en-US", StatesideDefaults.US_ENGLISH_TAG)
     }
 

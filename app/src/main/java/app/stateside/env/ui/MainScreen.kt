@@ -3,19 +3,26 @@ package app.stateside.env.ui
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -31,6 +38,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -48,6 +56,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,6 +75,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.stateside.env.model.CoreSuiteApp
@@ -111,13 +121,22 @@ fun MainScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                expandedHeight = 68.dp,
                 title = {
-                    Column {
-                        Text("美境 · Stateside", fontWeight = FontWeight.Bold)
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                         Text(
-                            text = "美区电话卡环境 · 海外与 AI 应用原生英语工作台",
+                            text = "美境 · Stateside",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "美区电话卡 · 应用原生英语工作台",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 },
@@ -133,389 +152,393 @@ fun MainScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (!state.hasPhonePermission || !state.hasNotificationPermission || !state.hasLocalNetworkPermission) {
-                OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "授予双卡状态、通知与本地网络权限",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "用于校验双卡 US 状态，并在 Android 17 真机上自动识别无线调试端口与通知栏提交配对码。",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        FilledTonalButton(onClick = onRequestPermissions) {
-                            Text("一键允许")
-                        }
-                    }
-                }
-            }
+            // 自适应小屏旗舰（如 347dp 紧凑屏）、常规直板机（360~430dp）与折叠屏/平板展开态（>=600dp）
+            val isCompactScreen = maxWidth < 365.dp
+            val outerHorizontalPad = if (isCompactScreen) 12.dp else 16.dp
+            val cardInnerPad = if (isCompactScreen) 14.dp else 16.dp
 
-            // 顶部主控卡片 + 已安装应用安全快启坞
-            HeroWorkspaceCard(
-                state = state,
-                onStartOnboarding = {
-                    onRequestPermissions()
-                    showOnboarding = true
-                },
-                onApplyStateside = onApplyStateside,
-                onSafeLaunchApp = onSafeLaunchApp
-            )
-
-            // 卡片一：默认自动勾选的「美境核心英语应用组」（TikTok、X、Claude、ChatGPT）+ 扩展应用
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "英语驱动应用组（固定美国英语 en-US）",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "以下四大核心工具开箱默认勾选，开启美境时自动切换为纯正美式英语界面（手机系统保持简体中文不变）：",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    state.coreSuiteItems.forEach { item ->
-                        val installedPkg = item.installedPackage
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 600.dp)
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = outerHorizontalPad, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (!state.hasPhonePermission || !state.hasNotificationPermission || !state.hasLocalNetworkPermission) {
+                    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(cardInnerPad),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                if (installedPkg != null) {
-                                    InstalledAppIcon(
-                                        packageName = installedPkg,
-                                        size = 36.dp,
-                                        modifier = Modifier.padding(end = 10.dp)
-                                    )
-                                }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = item.suiteApp.title,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            text = when {
-                                                installedPkg != null && item.isEnglishConfirmed -> "已安装 · en-US 已锁定"
-                                                installedPkg != null -> "已安装"
-                                                else -> "未安装"
-                                            },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (installedPkg != null) {
-                                                MaterialTheme.colorScheme.secondary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            }
-                                        )
-                                    }
+                            Row(verticalAlignment = Alignment.Top) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .padding(top = 2.dp)
+                                        .size(20.dp)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
                                     Text(
-                                        text = item.suiteApp.roleDesc,
+                                        text = "授予双卡、通知与本地网络权限",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "用于实时核验双卡 US 状态，并在无线调试页面下拉通知栏直接完成配对。",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-
-                                if (installedPkg != null && state.hasPrivilegeChannel) {
-                                    TextButton(
-                                        onClick = { onPinShortcutForApp(installedPkg, item.suiteApp.title) }
-                                    ) {
-                                        Text("桌面图标")
-                                    }
-                                }
-
-                                Checkbox(
-                                    checked = item.isEnabled,
-                                    onCheckedChange = { onToggleCoreSuiteApp(item.suiteApp) }
-                                )
                             }
-                        }
-                    }
-
-                    if (state.extraAppItems.isNotEmpty()) {
-                        HorizontalDivider()
-                        Text(
-                            text = "已添加的扩展英语应用：",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        state.extraAppItems.forEach { extra ->
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
-                                ),
-                                modifier = Modifier.fillMaxWidth()
+                            FilledTonalButton(
+                                onClick = onRequestPermissions,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 42.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (extra.isInstalled) {
-                                        InstalledAppIcon(
-                                            packageName = extra.packageName,
-                                            size = 32.dp,
-                                            modifier = Modifier.padding(end = 10.dp)
-                                        )
-                                    }
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = extra.appLabel,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        Text(
-                                            text = if (extra.isEnglishConfirmed) {
-                                                "${extra.packageName} · en-US 已锁定"
-                                            } else {
-                                                extra.packageName
-                                            },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    if (extra.isInstalled && state.hasPrivilegeChannel) {
-                                        TextButton(
-                                            onClick = { onPinShortcutForApp(extra.packageName, extra.appLabel) }
-                                        ) {
-                                            Text("桌面图标")
-                                        }
-                                    }
-                                    IconButton(onClick = { onToggleExtraPkg(extra.packageName) }) {
-                                        Icon(
-                                            Icons.Default.Close,
-                                            contentDescription = "移除扩展应用",
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
+                                Text("一键授予所需权限", maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
-                    }
-
-                    FilledTonalButton(
-                        onClick = {
-                            onOpenAppPicker()
-                            showAppPicker = true
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        val extraCount = state.userSettings.extraEnglishPackages.size
-                        Text(
-                            if (extraCount == 0) {
-                                "添加其他需要驱动成美国英语的应用"
-                            } else {
-                                "管理扩展英语应用（已选 $extraCount 款）"
-                            }
-                        )
                     }
                 }
-            }
 
-            // 卡片二：电话卡区域状态（默认美国 T-Mobile）
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                // 顶部主控卡片 + 2 列等宽对齐安全快启坞
+                HeroWorkspaceCard(
+                    state = state,
+                    cardPadding = cardInnerPad,
+                    onStartOnboarding = {
+                        onRequestPermissions()
+                        showOnboarding = true
+                    },
+                    onApplyStateside = onApplyStateside,
+                    onSafeLaunchApp = onSafeLaunchApp
+                )
+
+                // 卡片一：默认自动勾选的「美境核心英语应用组」+ 扩展应用
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(cardInnerPad),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            text = "电话卡目标区域",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        TextButton(onClick = { showCarrierOptions = !showCarrierOptions }) {
-                            Text(if (showCarrierOptions) "收起运营商" else "目标：${state.userSettings.selectedCarrier.carrierNameOverride} (US)")
-                        }
-                    }
-
-                    AnimatedVisibility(visible = showCarrierOptions) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Text(
-                                text = "选择模拟的美国本土运营商（默认 T-Mobile 兼容性最佳）：",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "英语驱动应用组",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                UsCarrierPreset.entries.forEach { preset ->
-                                    val selected = state.userSettings.selectedCarrier == preset
-                                    FilterChip(
-                                        selected = selected,
-                                        onClick = { onSelectCarrier(preset) },
-                                        label = { Text(preset.carrierNameOverride) },
-                                        leadingIcon = if (selected) {
-                                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                        } else null
-                                    )
-                                }
-                            }
+                            Spacer(Modifier.width(8.dp))
+                            StatusPillBadge(
+                                text = "固定 en-US",
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         }
-                    }
-
-                    if (state.simCards.isEmpty()) {
                         Text(
-                            text = if (state.hasPhonePermission) {
-                                "未检测到实体电话卡/eSIM（无卡状态不会触发国内运营商锁区，可直接驱动应用英语环境）"
-                            } else {
-                                "授予电话状态权限后可实时查看卡 1 / 卡 2 的物理归属地与对外上报状态"
-                            },
+                            text = "默认勾选四大海外与 AI 工具，开启美境时自动锁定美式英语（手机系统保持简体中文不变）：",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    } else {
-                        state.simCards.forEach { sim ->
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (sim.isUsSpoofActive) {
-                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+
+                        state.coreSuiteItems.forEach { item ->
+                            CoreSuiteAppRowCard(
+                                item = item,
+                                canPinShortcut = state.hasPrivilegeChannel,
+                                onToggle = { onToggleCoreSuiteApp(item.suiteApp) },
+                                onPinShortcut = { pkg ->
+                                    onPinShortcutForApp(pkg, item.suiteApp.title)
+                                }
+                            )
+                        }
+
+                        if (state.extraAppItems.isNotEmpty()) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+                            Text(
+                                text = "扩展英语应用",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            state.extraAppItems.forEach { extra ->
+                                ExtraEnglishAppRowCard(
+                                    extra = extra,
+                                    canPinShortcut = state.hasPrivilegeChannel,
+                                    onRemove = { onToggleExtraPkg(extra.packageName) },
+                                    onPinShortcut = {
+                                        onPinShortcutForApp(extra.packageName, extra.appLabel)
                                     }
-                                ),
-                                modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        FilledTonalButton(
+                            onClick = {
+                                onOpenAppPicker()
+                                showAppPicker = true
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 46.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            val extraCount = state.userSettings.extraEnglishPackages.size
+                            Text(
+                                text = if (extraCount == 0) {
+                                    "添加其他英语应用"
+                                } else {
+                                    "管理扩展英语应用（已选 $extraCount 款）"
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                // 卡片二：电话卡目标区域（默认保持原状态栏运营商显示）
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(cardInnerPad),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                Text(
+                                    text = "电话卡目标区域",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "当前模式：${state.userSettings.selectedCarrier.chipLabel}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            TextButton(
+                                onClick = { showCarrierOptions = !showCarrierOptions },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = if (showCarrierOptions) "收起" else "切换模式",
+                                    softWrap = false,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(visible = showCarrierOptions) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "默认「保持原运营商」与 Simlet 一致：仅将 SIM 国家码设为美国 (US)，状态栏与通知栏保留原中国电信/联通/移动不变；也可按需切换显示名：",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    UsCarrierPreset.entries.forEach { preset ->
+                                        val selected = state.userSettings.selectedCarrier == preset
+                                        FilterChip(
+                                            selected = selected,
+                                            onClick = { onSelectCarrier(preset) },
+                                            label = {
+                                                Text(
+                                                    text = preset.chipLabel,
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
+                                            },
+                                            leadingIcon = if (selected) {
+                                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                            } else null
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (state.simCards.isEmpty()) {
+                            Text(
+                                text = if (state.hasPhonePermission) {
+                                    "未检测到实体电话卡 / eSIM（无卡状态不会触发国内运营商锁区，可直接驱动应用英语环境）"
+                                } else {
+                                    "授予电话状态权限后可实时查看双卡物理归属地与当前对外国家码"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            state.simCards.forEach { sim ->
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (sim.isUsSpoofActive) {
+                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        }
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(5.dp)
                                     ) {
-                                        Text(
-                                            text = "${sim.slotLabel} · 物理卡：${sim.realCountryLabel}",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = if (sim.isUsSpoofActive) {
-                                                "当前对外上报：美国 ${sim.currentReportedCarrier} (US)"
-                                            } else {
-                                                "当前对外上报：${sim.currentReportedCarrier} (${sim.currentReportedIso})"
-                                            },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = if (sim.isUsSpoofActive) "美境生效" else "国内原卡",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (sim.isUsSpoofActive) {
-                                            MaterialTheme.colorScheme.secondary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "${sim.slotLabel} · 物理卡：${sim.realCountryLabel}",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            StatusPillBadge(
+                                                text = if (sim.isUsSpoofActive) "美境生效" else "国内原卡",
+                                                containerColor = if (sim.isUsSpoofActive) {
+                                                    MaterialTheme.colorScheme.secondary
+                                                } else {
+                                                    MaterialTheme.colorScheme.surfaceVariant
+                                                },
+                                                contentColor = if (sim.isUsSpoofActive) {
+                                                    MaterialTheme.colorScheme.onSecondary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                }
+                                            )
                                         }
-                                    )
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Text(
+                                                text = if (sim.isUsSpoofActive) {
+                                                    "国家码：美国 (US)"
+                                                } else {
+                                                    "国家码：${sim.currentReportedIso}"
+                                                },
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                softWrap = false,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                text = "显示：${sim.currentReportedCarrier}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // 卡片三：重启自愈守护
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "无感守护",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                // 卡片三：重启自愈守护
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(cardInnerPad),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "手机重启连上 Wi-Fi 后自动恢复美境",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = "电话卡区域覆盖在手机重启后会复原；开启后一旦连上已授权 Wi-Fi 将自动静默补写（应用英语设置永久保留无需强停）",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Text(
+                            text = "无感守护",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text(
+                                    text = "重启连上 Wi-Fi 后自动恢复美境",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "手机重启后一旦连上已授权 Wi-Fi 将自动静默补写美区国家码（应用英语设置永久保留）",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Switch(
+                                checked = state.userSettings.autoRestoreOnBoot,
+                                onCheckedChange = onToggleAutoBoot
                             )
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Switch(
-                            checked = state.userSettings.autoRestoreOnBoot,
-                            onCheckedChange = onToggleAutoBoot
+
+                        HorizontalDivider()
+
+                        Text(
+                            text = "当前机型贴士：${state.romGuide.keepAliveTip}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
 
-                    HorizontalDivider()
-
+                OutlinedButton(
+                    onClick = { showRestoreConfirm = true },
+                    enabled = !state.isWorking,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                ) {
                     Text(
-                        text = "当前机型贴士：${state.romGuide.keepAliveTip}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "一键恢复国内默认状态",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-            }
 
-            OutlinedButton(
-                onClick = { showRestoreConfirm = true },
-                enabled = !state.isWorking,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("一键恢复国内默认状态（还原电话卡与系统中文语言）")
+                Spacer(Modifier.height(18.dp))
             }
-
-            Spacer(Modifier.height(20.dp))
         }
     }
 
@@ -553,7 +576,7 @@ fun MainScreen(
             onDismissRequest = { showRestoreConfirm = false },
             title = { Text("确认恢复国内默认状态？") },
             text = {
-                Text("将把所有电话卡还原为真实国内运营商归属地，并将 TikTok、X、Claude、ChatGPT 及扩展应用恢复为跟随手机系统中文。随时可再次一键开启美境。")
+                Text("将把所有电话卡还原为真实国内归属地，并将 TikTok、X、Claude、ChatGPT 及扩展应用恢复为跟随手机系统中文。随时可再次一键开启美境。")
             },
             confirmButton = {
                 Button(
@@ -577,16 +600,18 @@ fun MainScreen(
         AlertDialog(
             onDismissRequest = onClearMessages,
             icon = { Icon(Icons.Default.Warning, contentDescription = null) },
-            title = { Text("需要检查无线调试或系统开关") },
+            title = { Text("请检查无线调试状态") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(state.errorDetail)
-                    Text(
-                        text = "${state.romGuide.brandTitle}重点检查：${state.romGuide.criticalExtraToggleTitle}",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    if (state.romGuide.requiresExtraSecurityToggle) {
+                        Text(
+                            text = "${state.romGuide.brandTitle}重点检查：${state.romGuide.criticalExtraToggleTitle}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -606,17 +631,283 @@ fun MainScreen(
                         showOnboarding = true
                     }
                 ) {
-                    Text("打开激活向导")
+                    Text("打开向导")
                 }
             }
         )
     }
 }
 
+@Composable
+private fun StatusPillBadge(
+    text: String,
+    containerColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = RoundedCornerShape(6.dp),
+        modifier = modifier
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            softWrap = false,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+        )
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CoreSuiteAppRowCard(
+    item: CoreSuiteUiItem,
+    canPinShortcut: Boolean,
+    onToggle: () -> Unit,
+    onPinShortcut: (String) -> Unit
+) {
+    val installedPkg = item.installedPackage
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+        ),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (installedPkg != null) {
+                InstalledAppIcon(
+                    packageName = installedPkg,
+                    size = 40.dp
+                )
+            } else {
+                AppMonogramPlaceholder(
+                    letter = item.suiteApp.title.take(1),
+                    size = 40.dp
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = item.suiteApp.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    )
+                    StatusPillBadge(
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                        text = when {
+                            installedPkg != null && item.isEnglishConfirmed -> "en-US 已锁定"
+                            installedPkg != null -> "已安装"
+                            else -> "未安装"
+                        },
+                        containerColor = when {
+                            installedPkg != null && item.isEnglishConfirmed -> {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            }
+                            installedPkg != null -> {
+                                MaterialTheme.colorScheme.primaryContainer
+                            }
+                            else -> {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        },
+                        contentColor = when {
+                            installedPkg != null && item.isEnglishConfirmed -> {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            }
+                            installedPkg != null -> {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            }
+                            else -> {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        }
+                    )
+                }
+
+                Text(
+                    text = item.suiteApp.roleDesc,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (installedPkg != null && canPinShortcut) {
+                    PinGuardShortcutChip(
+                        onClick = { onPinShortcut(installedPkg) }
+                    )
+                }
+            }
+
+            Checkbox(
+                checked = item.isEnabled,
+                onCheckedChange = { onToggle() }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExtraEnglishAppRowCard(
+    extra: ExtraEnglishAppUiItem,
+    canPinShortcut: Boolean,
+    onRemove: () -> Unit,
+    onPinShortcut: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
+        ),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (extra.isInstalled) {
+                InstalledAppIcon(
+                    packageName = extra.packageName,
+                    size = 36.dp
+                )
+            } else {
+                AppMonogramPlaceholder(
+                    letter = extra.appLabel.take(1),
+                    size = 36.dp
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = extra.appLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    )
+                    if (extra.isEnglishConfirmed) {
+                        StatusPillBadge(
+                            modifier = Modifier.align(Alignment.CenterVertically),
+                            text = "en-US 已锁定",
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+                Text(
+                    text = extra.packageName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (extra.isInstalled && canPinShortcut) {
+                    PinGuardShortcutChip(onClick = onPinShortcut)
+                }
+            }
+
+            IconButton(onClick = onRemove) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "移除扩展应用",
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PinGuardShortcutChip(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.padding(top = 2.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "添加桌面防漏改图标",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium,
+                softWrap = false,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppMonogramPlaceholder(
+    letter: String,
+    size: Dp,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Text(
+            text = letter.uppercase(),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 private fun HeroWorkspaceCard(
     state: MainUiState,
+    cardPadding: Dp,
     onStartOnboarding: () -> Unit,
     onApplyStateside: () -> Unit,
     onSafeLaunchApp: (String) -> Unit
@@ -632,39 +923,53 @@ private fun HeroWorkspaceCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(cardPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.Top) {
                 Icon(
                     imageVector = if (state.isEnvironmentReady) Icons.Default.CheckCircle else Icons.Default.PlayArrow,
                     contentDescription = null,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .size(26.dp)
                 )
                 Spacer(Modifier.width(10.dp))
-                Column {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Text(
                         text = when {
                             state.isEnvironmentReady && state.hasPrivilegeChannel -> "美境生效中（US · English）"
-                            state.isEnvironmentReady && !state.hasPrivilegeChannel -> "美境已生效（待绑定本机无线调试）"
-                            !state.hasPrivilegeChannel -> "欢迎进入美境 · 首次仅需 1 分钟激活"
+                            state.isEnvironmentReady && !state.hasPrivilegeChannel -> "美境已生效（待绑定无线调试）"
+                            !state.hasPrivilegeChannel -> "欢迎使用美境 · 1 分钟首次激活"
                             else -> "待一键开启美境"
                         },
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Text(
                         text = when {
                             state.isEnvironmentReady && state.hasPrivilegeChannel -> {
                                 val channelTag = if (state.hasRootAccess) "Root 直通" else "本机无线调试"
-                                "通道：$channelTag · 电话卡已模拟美国 ${state.userSettings.selectedCarrier.carrierNameOverride}，英语应用组已就绪"
+                                val carrierDesc = if (state.userSettings.selectedCarrier.keepsOriginalCarrierName) {
+                                    "双卡美国 (US · 保留原运营商)"
+                                } else {
+                                    "双卡美国 ${state.userSettings.selectedCarrier.carrierNameOverride} (US)"
+                                }
+                                if (state.unconfirmedEnglishAppsCount > 0) {
+                                    "通道：$channelTag · $carrierDesc · ${state.unconfirmedEnglishAppsCount} 款新应用待同步"
+                                } else {
+                                    "通道：$channelTag · $carrierDesc · 英语应用已就绪"
+                                }
                             }
                             state.isEnvironmentReady && !state.hasPrivilegeChannel -> {
-                                "双卡与英语应用当前已处于美区状态；建议完成一次本机无线调试配对，以便拔掉电脑数据线或日后手机重启时也能在手机上独立一键恢复"
+                                "双卡与英语应用已处于美区状态；建议绑定一次手机自身无线调试，脱离电脑后也能随时在手机上切换或恢复"
                             }
-                            !state.hasPrivilegeChannel -> "免装 Shizuku 等极客插件，完成一次本机无线调试绑定即可一键驱动美区卡与全套英语应用"
+                            !state.hasPrivilegeChannel -> "免装 Shizuku 等极客插件，绑定一次本机无线调试即可一键驱动美区卡（保留原状态栏运营商）与英语应用"
                             state.hasRootAccess -> "已检测到本机 Root 免配对通道，点击下方按钮立即驱动美境环境"
-                            else -> "点击下方按钮即可自动重连本机无线调试，2 秒内切换为美区电话卡与英语环境"
+                            else -> "点击下方按钮自动重连本机无线调试，2 秒内切换为美区电话卡与英语环境"
                         },
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -681,86 +986,115 @@ private fun HeroWorkspaceCard(
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.5.dp)
                     Spacer(Modifier.width(12.dp))
-                    Text(state.workingMessage, fontWeight = FontWeight.Medium)
+                    Text(
+                        text = state.workingMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             } else if (!state.hasPrivilegeChannel) {
                 Button(
                     onClick = onStartOnboarding,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .heightIn(min = 50.dp)
                 ) {
                     Text(
-                        text = if (state.isEnvironmentReady) "绑定本机无线调试（脱离电脑独立使用）" else "开始 1 分钟首次激活",
-                        style = MaterialTheme.typography.titleMedium
+                        text = if (state.isEnvironmentReady) "绑定本机无线调试" else "开始 1 分钟首次激活",
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 val dockItems = state.safeLaunchDockItems
                 if (state.isEnvironmentReady && dockItems.isNotEmpty()) {
-                    Text(
-                        text = "安全快启坞（当前美区环境已就绪）：",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold
+                    SafeLaunchSymmetricGrid(
+                        title = "安全快启坞（当前美区环境已就绪）：",
+                        dockItems = dockItems,
+                        onSafeLaunchApp = onSafeLaunchApp
                     )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        dockItems.forEach { item ->
-                            FilledTonalButton(
-                                onClick = { onSafeLaunchApp(item.packageName) }
-                            ) {
-                                InstalledAppIcon(
-                                    packageName = item.packageName,
-                                    size = 18.dp,
-                                    modifier = Modifier.padding(end = 6.dp)
-                                )
-                                Text(item.title)
-                            }
-                        }
-                    }
                 }
             } else {
                 Button(
                     onClick = onApplyStateside,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
+                        .heightIn(min = 50.dp)
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = if (state.isEnvironmentReady) "同步刷新美境配置" else "一键开启美境",
-                        style = MaterialTheme.typography.titleMedium
+                        text = when {
+                            state.isEnvironmentReady && state.unconfirmedEnglishAppsCount > 0 -> {
+                                "同步新装应用英语环境 (${state.unconfirmedEnglishAppsCount} 款)"
+                            }
+                            state.isEnvironmentReady -> "同步刷新美境配置"
+                            else -> "一键开启美境"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                // 已安装的核心应用与扩展应用安全快启坞
                 val dockItems = state.safeLaunchDockItems
                 if (dockItems.isNotEmpty()) {
-                    Text(
-                        text = "安全快启坞（自动核验美区环境后秒开）：",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold
+                    SafeLaunchSymmetricGrid(
+                        title = "安全快启坞（自动核验美区环境后秒开）：",
+                        dockItems = dockItems,
+                        onSafeLaunchApp = onSafeLaunchApp
                     )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SafeLaunchSymmetricGrid(
+    title: String,
+    dockItems: List<DockAppUiItem>,
+    onSafeLaunchApp: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        dockItems.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowItems.forEach { item ->
+                    FilledTonalButton(
+                        onClick = { onSafeLaunchApp(item.packageName) },
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 44.dp)
                     ) {
-                        dockItems.forEach { item ->
-                            FilledTonalButton(
-                                onClick = { onSafeLaunchApp(item.packageName) }
-                            ) {
-                                InstalledAppIcon(
-                                    packageName = item.packageName,
-                                    size = 18.dp,
-                                    modifier = Modifier.padding(end = 6.dp)
-                                )
-                                Text(item.title)
-                            }
-                        }
+                        InstalledAppIcon(
+                            packageName = item.packageName,
+                            size = 20.dp,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
+                }
+                if (rowItems.size == 1) {
+                    Spacer(Modifier.weight(1f))
                 }
             }
         }
@@ -794,7 +1128,7 @@ fun InstalledAppIcon(
             contentDescription = null,
             modifier = modifier
                 .size(size)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(8.dp))
         )
     }
 }

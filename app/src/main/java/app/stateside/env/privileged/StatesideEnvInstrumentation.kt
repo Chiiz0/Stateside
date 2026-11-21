@@ -71,7 +71,12 @@ class StatesideEnvInstrumentation : Instrumentation() {
 
                     val summary = when {
                         hasNoSim -> "无插卡模式就绪，已将 ${updatedPkgs.size} 款已安装应用锁定为美国英语 (en-US)"
-                        allSimsOk -> "已将 ${simResults.size} 张电话卡切换为美国 ${carrier.carrierNameOverride}，并驱动 ${updatedPkgs.size} 款应用为美国英语"
+                        allSimsOk && carrier.keepsOriginalCarrierName -> {
+                            "已将 ${simResults.size} 张电话卡区域设为美国 (US，保留原运营商显示)，并驱动 ${updatedPkgs.size} 款应用为美国英语"
+                        }
+                        allSimsOk -> {
+                            "已将 ${simResults.size} 张电话卡切换为美国 ${carrier.carrierNameOverride}，并驱动 ${updatedPkgs.size} 款应用为美国英语"
+                        }
                         else -> "部分卡槽覆盖未通过：$firstError"
                     }
 

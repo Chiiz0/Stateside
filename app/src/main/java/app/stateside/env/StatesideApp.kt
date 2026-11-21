@@ -5,9 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import app.stateside.env.data.UserPrefsRepository
-import org.conscrypt.Conscrypt
 import org.lsposed.hiddenapibypass.HiddenApiBypass
-import java.security.Security
 
 class StatesideApp : Application() {
 
@@ -16,15 +14,9 @@ class StatesideApp : Application() {
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
-        // 解除 Android 16 / 17 对 CarrierConfigManager.overrideConfig 与 ILocaleManager 的隐藏 API 限制
+        // 解除 Android 14 ~ 17 对 CarrierConfigManager.overrideConfig、ILocaleManager 与系统原生 Conscrypt.exportKeyingMaterial 的隐藏 API 限制
         runCatching {
             HiddenApiBypass.addHiddenApiExemptions("L")
-        }
-        // 注入 Conscrypt 提供程序以保障本机无线调试 TLS 1.3 + SPAKE2 配对握手稳定
-        runCatching {
-            if (Security.getProvider("Conscrypt") == null) {
-                Security.insertProviderAt(Conscrypt.newProvider(), 1)
-            }
         }
     }
 

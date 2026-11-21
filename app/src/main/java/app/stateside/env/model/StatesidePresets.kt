@@ -1,41 +1,61 @@
 package app.stateside.env.model
 
 /**
- * 内置美国主流运营商预设。
- * 默认使用 T-Mobile US（北美兼容性最广，对海外社交与 AI 工具的美区 SIM 识别最稳）。
+ * 内置美国目标区域与运营商显示预设。
+ * 默认使用「保持原运营商显示（推荐）」：仅将电话卡国家码（SIM Country ISO）覆盖为美国 `us`（与 Simlet 默认行为一致），
+ * 完全不修改状态栏与通知栏原有的「中国电信 / 中国联通 / 中国移动」显示；同时保留可选模拟 T-Mobile / AT&T / Verizon 名称。
  */
 enum class UsCarrierPreset(
     val id: String,
     val displayName: String,
+    val chipLabel: String,
     val carrierNameOverride: String,
     val countryIso: String,
     val sampleMccMnc: String
 ) {
+    US_KEEP_CARRIER(
+        id = "us_keep_carrier",
+        displayName = "美国 · 保持原状态栏运营商（默认推荐）",
+        chipLabel = "保持原运营商（推荐）",
+        carrierNameOverride = "",
+        countryIso = "us",
+        sampleMccMnc = "310260"
+    ),
     TMOBILE(
         id = "tmobile_us",
-        displayName = "美国 · T-Mobile（默认推荐）",
+        displayName = "美国 · T-Mobile（同时覆盖运营商名）",
+        chipLabel = "T-Mobile",
         carrierNameOverride = "T-Mobile",
         countryIso = "us",
         sampleMccMnc = "310260"
     ),
     ATT(
         id = "att_us",
-        displayName = "美国 · AT&T",
+        displayName = "美国 · AT&T（同时覆盖运营商名）",
+        chipLabel = "AT&T",
         carrierNameOverride = "AT&T",
         countryIso = "us",
         sampleMccMnc = "310410"
     ),
     VERIZON(
         id = "verizon_us",
-        displayName = "美国 · Verizon",
+        displayName = "美国 · Verizon（同时覆盖运营商名）",
+        chipLabel = "Verizon",
         carrierNameOverride = "Verizon",
         countryIso = "us",
         sampleMccMnc = "311480"
     );
 
+    val keepsOriginalCarrierName: Boolean
+        get() = carrierNameOverride.isBlank()
+
     companion object {
+        val OVERRIDE_BRAND_NAMES: Set<String> = entries
+            .mapNotNull { it.carrierNameOverride.takeIf(String::isNotBlank) }
+            .toSet()
+
         fun fromId(id: String?): UsCarrierPreset =
-            entries.firstOrNull { it.id == id } ?: TMOBILE
+            entries.firstOrNull { it.id == id } ?: US_KEEP_CARRIER
     }
 }
 

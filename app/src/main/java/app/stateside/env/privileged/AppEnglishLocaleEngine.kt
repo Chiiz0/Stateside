@@ -22,6 +22,7 @@ object AppEnglishLocaleEngine {
 
     private const val DESCRIPTOR_LOCALE_MANAGER = "android.app.ILocaleManager"
     private const val TRANSACTION_SET_APPLICATION_LOCALES = IBinder.FIRST_CALL_TRANSACTION + 0
+    private val languageSplitRegex = Regex("""^config\.[a-z]{2}(_[a-zA-Z]+)?$""")
 
     fun applyUsEnglishToPackages(
         context: Context,
@@ -108,6 +109,13 @@ object AppEnglishLocaleEngine {
             }
 
             if (anyUserSucceeded) {
+                val isApplyingEnglish = targetTagsNormalized.startsWith("en")
+                if (isApplyingEnglish && anyUserChangedLocale && isMissingEnglishLanguageSplit(pm, pkg)) {
+                    // 针对在中文系统下刚从 Google Play 安装的动态分包应用（如 TikTok 初装仅有 split_config.zh.apk）：
+                    // setApplicationLocales 会触发 Play 商店后台拉取 split_config.en.apk，短暂等待其落盘后再重载进程
+                    waitForEnglishSplitIfInstalling(pm, pkg)
+                }
+
                 // 仅当该应用本次确实发生了语言变更时才强停重载，保障开机静默补写时绝不打断正在对话的 Claude/ChatGPT
                 if (forceStopAfterApply && anyUserChangedLocale && am != null && pkg != context.packageName) {
                     runCatching {
@@ -250,5 +258,23 @@ object AppEnglishLocaleEngine {
             }.getOrDefault(false)
         }
         return false
+    }
+
+    private fun isMissingEnglishLanguageSplit(pm: PackageManager, packageName: String): Boolean =
+        runCatching {
+            val info = pm.getApplicationInfo(packageName, PackageManager.ApplicationInfoFlags.of(0L))
+            val splits = info.splitNames ?: return@runCatching false
+            val hasAnyLangSplit = splits.any { languageSplitRegex.matches(it) }
+            val hasEnglishSplit = splits.any { it == "config.en" || it.startsWith("config.en_") }
+            hasAnyLangSplit && !hasEnglishSplit
+        }.getOrDefault(false)
+
+    private fun waitForEnglishSplitIfInstalling(pm: PackageManager, packageName: String) {
+        repeat(10) {
+            Thread.sleep(450L)
+            if (!isMissingEnglishLanguageSplit(pm, packageName)) {
+                return
+            }
+        }
     }
 }

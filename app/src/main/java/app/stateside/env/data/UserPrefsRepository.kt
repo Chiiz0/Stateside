@@ -13,7 +13,7 @@ data class UserSettings(
     val isAdbPaired: Boolean = false,
     val lastConnectPort: Int = 0,
     val manualConnectPort: Int = 0,
-    val selectedCarrier: UsCarrierPreset = UsCarrierPreset.TMOBILE,
+    val selectedCarrier: UsCarrierPreset = UsCarrierPreset.US_KEEP_CARRIER,
     val autoRestoreOnBoot: Boolean = true,
     // 记录用户当前期望处于美境（开启美境时置 true，主动执行「恢复国内默认」时置 false）
     val isStatesideDesired: Boolean = false,
@@ -70,7 +70,7 @@ class UserPrefsRepository(context: Context) {
     val settings: StateFlow<UserSettings> = _settings.asStateFlow()
 
     private fun load(): UserSettings {
-        val carrierId = prefs.getString(KEY_CARRIER, UsCarrierPreset.TMOBILE.id)
+        val carrierId = prefs.getString(KEY_CARRIER, UsCarrierPreset.US_KEEP_CARRIER.id)
         val disabledSet = prefs.getStringSet(KEY_DISABLED_SUITE_IDS, emptySet())?.toSet() ?: emptySet()
         val extraSet = prefs.getStringSet(KEY_EXTRA_ENGLISH_PKGS, emptySet())?.toSet() ?: emptySet()
         val confirmedSet = prefs.getStringSet(KEY_CONFIRMED_ENGLISH_PKGS, emptySet())?.toSet() ?: emptySet()
@@ -162,7 +162,7 @@ class UserPrefsRepository(context: Context) {
         private const val KEY_PAIRED = "adb_paired"
         private const val KEY_LAST_PORT = "last_connect_port"
         private const val KEY_MANUAL_PORT = "manual_connect_port"
-        private const val KEY_CARRIER = "selected_carrier_id"
+        private const val KEY_CARRIER = "selected_carrier_preset_v2"
         private const val KEY_AUTO_BOOT = "auto_restore_on_boot"
         private const val KEY_STATESIDE_DESIRED = "stateside_desired_active"
         private const val KEY_APPLIED_BOOT_COUNT = "applied_boot_count"

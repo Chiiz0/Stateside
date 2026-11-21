@@ -7,6 +7,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,6 +51,7 @@ class SafeLaunchActivity : ComponentActivity() {
     private var statusMessage by mutableStateOf("正在快速核验美境状态…")
     private var errorReason by mutableStateOf<String?>(null)
 
+    @OptIn(ExperimentalLayoutApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -61,7 +65,7 @@ class SafeLaunchActivity : ComponentActivity() {
             ?.takeIf { it.isNotBlank() }
             ?: "目标应用"
 
-        if (AppLaunchGuardHelper.isStatesideReadyForFastLaunch(this)) {
+        if (AppLaunchGuardHelper.isStatesideReadyForFastLaunch(this, targetPkg)) {
             val launched = targetPkg != null && AppLaunchGuardHelper.launchPackageDirectly(this, targetPkg)
             if (!launched) {
                 startActivity(Intent(this, MainActivity::class.java))
@@ -75,12 +79,16 @@ class SafeLaunchActivity : ComponentActivity() {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
+                        .padding(horizontal = 18.dp, vertical = 24.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier
+                            .widthIn(max = 460.dp)
+                            .fillMaxWidth()
+                    ) {
                         Column(
-                            modifier = Modifier.padding(20.dp),
+                            modifier = Modifier.padding(18.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             Text(
@@ -95,7 +103,11 @@ class SafeLaunchActivity : ComponentActivity() {
                                         strokeWidth = 2.5.dp
                                     )
                                     Spacer(Modifier.width(12.dp))
-                                    Text(statusMessage, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        text = statusMessage,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f)
+                                    )
                                 }
                             } else {
                                 Text(
@@ -103,14 +115,14 @@ class SafeLaunchActivity : ComponentActivity() {
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error
                                 )
-                                Row(
+                                FlowRow(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     TextButton(onClick = { finish() }) {
-                                        Text("取消")
+                                        Text("取消", softWrap = false, maxLines = 1)
                                     }
-                                    Spacer(Modifier.width(6.dp))
                                     OutlinedButton(
                                         onClick = {
                                             startActivity(
@@ -120,16 +132,15 @@ class SafeLaunchActivity : ComponentActivity() {
                                             finish()
                                         }
                                     ) {
-                                        Text("主面板")
+                                        Text("主面板", softWrap = false, maxLines = 1)
                                     }
-                                    Spacer(Modifier.width(6.dp))
                                     Button(
                                         onClick = {
                                             ChineseRomGuide.openDeveloperOptionsOrAboutPhone(this@SafeLaunchActivity)
                                             finish()
                                         }
                                     ) {
-                                        Text("去打开无线调试")
+                                        Text("打开无线调试", softWrap = false, maxLines = 1)
                                     }
                                 }
                             }

@@ -57,8 +57,15 @@ object AppLaunchGuardHelper {
      * 2. 若未授 READ_PHONE_STATE：核验当前开机周期（BOOT_COUNT）内是否已由特权组件完成过美境写入。
      */
     @SuppressLint("MissingPermission")
-    fun isStatesideReadyForFastLaunch(context: Context): Boolean {
+    fun isStatesideReadyForFastLaunch(context: Context, targetPackage: String? = null): Boolean {
         val prefs = UserPrefsRepository(context).settings.value
+        if (!targetPackage.isNullOrBlank() &&
+            targetPackage in prefs.effectiveEnglishPackages() &&
+            targetPackage !in prefs.confirmedEnglishPackages
+        ) {
+            // 目标应用（如刚从 Play 商店新装的 TikTok）尚未完成 en-US 锁定，先拦截补写一次英语与美区配置
+            return false
+        }
         val hasChannel = prefs.isAdbPaired || LocalAdbManager.getInstance(context).cachedHasRootAccess()
         val bootCount = UserPrefsRepository.readCurrentBootCount(context)
 

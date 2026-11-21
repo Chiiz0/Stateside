@@ -2,6 +2,28 @@
 
 本项目遵循 [语义化版本（Semantic Versioning）](https://semver.org/lang/zh-CN/) 与 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范。
 
+## [1.1.2] - 2026-11-20
+
+### 修复与增强（Fixed & Improved — 一加 15T / ColorOS 17 真机深度根因修复）
+- **彻底修复无线调试通知栏提交配对码后一直卡死在「正在完成中」的问题**：
+  1. 移除盲扫未知双栈端口连接逻辑（此前会误连 ColorOS 非 ADB 系统监听端口如 `*:35711`，由于 `libadb` 的 `PairingConnectionCtx` 无读超时且持有 `AbsAdbConnectionManager.mLock` 全局锁，导致握手无限阻塞并连带锁死后续连接）；
+  2. 改用独立 `PairingConnectionCtx` 实例 + `5.5s / 8.5s` 双重硬超时看门狗，任何异常或超时必立即中断并回显明确提示；
+  3. 通知栏配对与取消按钮由 `PendingIntent.getBroadcast` 全面升级为 `PendingIntent.getForegroundService`（对齐 `Shizuku-Next`），彻底绕开 ColorOS `OplusHansManager` 超强冻结对后台广播的延迟队列（`p_BC`）；
+  4. 修复 `NsdManager.unregisterServiceInfoCallback` 异步注销回调因局部线程池提前 `shutdownNow()` 触发 `ConnectivityThread` 抛出 `RejectedExecutionException` 导致后台进程静默崩溃、通知栏遗留「正在完成中」的隐蔽缺陷；
+  5. 修复 `libadb` 的 `AdbStream` 在远端命令正常结束关闭流时对 `InputStreamReader` 抛出 `IOException("Stream closed.")` 误判为执行失败的问题；
+  6. 移除内置旧版 `conscrypt-android:2.5.3` 原生库，全面切换至 Android 14~17 系统原生 `com.android.org.conscrypt.Conscrypt` TLS 1.3 + `exportKeyingMaterial`，Release 安装包体积缩减至约 **4.2 MB**。
+- **默认保持状态栏与通知栏原运营商显示不变（对齐 `Simlet` 无痕行为）**：
+  1. 新增并默认启用 **`US_KEEP_CARRIER`（保持原运营商显示）** 预设：仅覆盖 `sim_country_iso_override_string = "us"`，绝不修改 `KEY_CARRIER_NAME_OVERRIDE_BOOL` 或 `setOperatorBrandOverride`，状态栏与控制中心原样保留「中国电信 / 中国联通 / 中国移动」，同时海外与 AI 应用读取国家码仍为 `us`；
+  2. 自动调用 `setOperatorBrandOverride(null)` 清理早期版本遗留的 `UiccProfile` 品牌名缓存；在已绑定无线调试或 Root 时点击运营商选项即可实时切换生效。
+- **完善 Google Play 动态分包（Split APK）与后装应用的英语（`en-US`）同步**：
+  1. 针对在中文系统下刚从 Google Play 安装的 TikTok 等动态分包应用（初装仅含 `split_config.zh.apk`），在写入 `en-US` 触发 Play 商店后台补齐 `split_config.en.apk` 时自动轮询等待英文分包落盘后再重载进程；
+  2. 主界面快启坞与桌面守卫图标自动检测后装应用是否已完成 `en-US` 锁定，若为开启美境后新装的 TikTok 则先自动补写 `en-US` 再拉起应用。
+- **适配 ColorOS 16 / 17 向导文案**：ColorOS 16 / 17（Android 16 / 17）已移除旧版「禁止权限监控」且原生支持无线调试特权委托，自动按系统 API 级别精准展示免额外开关指引。
+- **重构全页面响应式自适应布局（兼容紧凑屏、常规直板机、大字号与折叠屏）**：
+  1. 引入 `BoxWithConstraints` 自适应间距与 `600dp` 最大居中宽度，针对 `347dp` 等小尺寸高密度屏自动收窄外边距释放横向空间；
+  2. 重构顶栏高度、2 列等宽对称「安全快启坞」、胶囊状态徽章（`StatusPillBadge`）与应用条目分层卡片（将「添加桌面防漏改图标」独立为底部胶囊按钮，彻底消除横向挤压折行）；
+  3. 重构双卡区域卡片、权限横幅、首次激活向导与扩展应用抽屉，全面支持大字体缩放（`heightIn` + `FlowRow` 弹性换行）。
+
 ## [1.1.1] - 2026-11-20
 
 ### 修复与增强（Fixed & Improved — Android 17 / ColorOS 17 真机实测修复）

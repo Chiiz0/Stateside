@@ -8,8 +8,9 @@
 -dontwarn io.github.muntashirakon.adb.**
 -dontwarn io.github.muntashirakon.crypto.spake2.**
 
-# Conscrypt TLS 1.3 + exportKeyingMaterial 反射与 JNI 入口
--keep class org.conscrypt.** { *; }
+# Android 系统原生 Conscrypt TLS 1.3 + exportKeyingMaterial 反射入口
+-keep class com.android.org.conscrypt.** { *; }
+-dontwarn com.android.org.conscrypt.**
 -dontwarn org.conscrypt.**
 
 # BouncyCastle ASN.1 X.509 证书构建
