@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 仅用于 127.0.0.1 本机无线调试回环连接，无任何外网请求或统计上报 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!-- Android 17 (API 37) 本地网络保护前向兼容声明 -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+
+    <!-- 读取手机双卡槽位与当前生效的国家码状态 -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- 首次激活时在系统设置内下拉通知栏直接输入 6 位无线调试配对码 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 保障用户在切去系统「开发者选项」操作期间后台配对雷达不被国产系统冻结 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- 开机（含解锁前 Direct Boot 阶段）自动重连无线调试并静默补写美区运营商配置 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 自动识别 TikTok、X、Claude、ChatGPT（含双开分身）并允许自由添加其他英语应用 -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <!-- 创建桌面「美境安全启动」快捷方式 -->
+    <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
+
+    <application
+        android:name=".StatesideApp"
+        android:allowBackup="false"
+        android:directBootAware="true"
+        android:enableOnBackInvokedCallback="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Stateside">
+
+        <!-- 主工作台：一键开启美境 + 海外与 AI 应用组管理 -->
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 桌面防漏改透明守卫页：毫秒级校验美区电话卡环境，重启掉线时自动补写后再拉起目标应用 -->
+        <activity
+            android:name=".ui.SafeLaunchActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/shortcut_default_label"
+            android:launchMode="singleInstance"
+            android:theme="@style/Theme.Stateside.Translucent" />
+
+        <!-- 无线调试自动寻端与通知栏配对前台服务 -->
+        <service
+            android:name=".adb.AdbPairingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="stateside_local_wireless_adb_pairing" />
+        </service>
+
+        <!-- 开机后等待 Wi-Fi 就绪自动静默补写美境的系统调度服务 -->
+        <service
+            android:name=".boot.BootRestoreJobService"
+            android:directBootAware="true"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- 接收通知栏 6 位无线调试配对码提交 -->
+        <receiver
+            android:name=".adb.PairingActionReceiver"
+            android:exported="false" />
+
+        <!-- 开机自动补写接收器（支持 Direct Boot 锁屏前与解锁后双阶段恢复 + Wi-Fi 延迟自愈调度） -->
+        <receiver
+            android:name=".boot.BootRestoreReceiver"
+            android:directBootAware="true"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+    <!--
+      Android 15 QPR / 16 / 17 核心突破机制（绕过 CVE-2025-48617 overrideConfig cannot be invoked by shell）：
+      由本机 127.0.0.1 无线 ADB 触发 am instrument 同进程免重启模式运行在本应用自身 UID (10xxx) 进程内，
+      通过公开 API UiAutomation.adoptShellPermissionIdentity() 借用 shell 权限，
+      天然绕过 TeleService 对 CallingUid == 2000 (shell) 的硬性拦截！
+    -->
+    <instrumentation
+        android:name=".privileged.StatesideEnvInstrumentation"
+        android:label="Stateside Privileged Environment Broker"
+        android:targetPackage="app.stateside.env" />
+
+</manifest>

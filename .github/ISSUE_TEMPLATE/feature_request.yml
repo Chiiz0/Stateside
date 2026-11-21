@@ -1,0 +1,20 @@
+name: 功能建议 / 新应用预设诉求 (Feature Request)
+description: 建议新增海外/AI 预设应用、运营商配置或交互体验优化
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 需求背景与使用场景
+      placeholder: 例如：希望在预设列表中支持某款海外应用分身包名，或优化某款桌面的快捷方式样式…
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望方案描述
+      placeholder: 描述您期望的交互或技术行为
+    validations:
+      required: true

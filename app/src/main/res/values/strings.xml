@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">美境</string>
+    <string name="shortcut_default_label">美境启动</string>
+    <string name="notif_channel_pairing">无线调试首次激活向导</string>
+    <string name="notif_channel_status">美境自动守护通知</string>
+    <string name="notif_input_hint">输入 6 位配对码</string>
+    <string name="notif_action_submit">提交配对码</string>
+    <string name="notif_action_stop">取消配对</string>
+</resources>

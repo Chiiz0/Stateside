@@ -1,0 +1,43 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-verify:
+    name: Unit Test, Build & 16KB Page Alignment Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run unit tests and assemble Debug & Release APKs
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease --stacktrace
+
+      - name: Verify Android 15/16/17 16KB page size alignment
+        run: |
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name "zipalign" | sort -V | tail -n 1)
+          echo "Using zipalign: $ZIPALIGN"
+          "$ZIPALIGN" -c -P 16 4 app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload Release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stateside-release-apk
+          path: app/build/outputs/apk/release/app-release.apk

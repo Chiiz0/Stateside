@@ -1,0 +1,26 @@
+Stateside (美境)
+Copyright 2026 Stateside Contributors
+
+This product includes software and architectural inspirations from the following
+open-source projects:
+
+1. MuntashirAkon/libadb-android & MuntashirAkon/spake2-java
+   - License: Apache-2.0 / GPL-3.0 dual-licensed (used under Apache-2.0)
+   - Purpose: Local 127.0.0.1 wireless ADB TLS 1.3 client & SPAKE2 pairing protocol.
+
+2. LSPosed/AndroidHiddenApiBypass
+   - License: Apache-2.0
+   - Purpose: Runtime hidden API exemption on Android 14–17.
+
+3. google/conscrypt & bcgit/bc-java (BouncyCastle)
+   - License: Apache-2.0 / MIT-like BouncyCastle License
+   - Purpose: TLS 1.3 keying material export & ASN.1 DER X.509 certificate encoding.
+
+4. Architectural Research Acknowledgements:
+   - RikkaApps/Shizuku & rushiranpise/Shizuku-Next (Apache-2.0):
+     Wireless debugging mDNS discovery and Direct Boot recovery patterns.
+   - vip458/Simlet (Apache-2.0), eigenlux-ai/roamer (MIT), svenuks/ImsForPixel (MIT):
+     Non-persistent CarrierConfig override via Instrumentation shell permission
+     delegation (CVE-2025-48617 workaround) and two-step MCC-based clean restore.
+   - TakeruF/android-perapp-language-selector (Apache-2.0):
+     ILocaleManager per-app locale override concepts.

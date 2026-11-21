@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 国产系统真机设置指南 (OEM Setup Guide)
+    url: https://github.com/Chiiz0/Stateside/blob/main/docs/OEM_SETUP_GUIDE.md
+    about: 小米澎湃、OPPO/一加 ColorOS、vivo OriginOS、荣耀 MagicOS、三星 One UI 首次激活必读
+  - name: 常见问题排查手册 (FAQ)
+    url: https://github.com/Chiiz0/Stateside/blob/main/docs/FAQ.md
+    about: 校园网/VPN 配对、5G 户外使用、双开分身与恢复默认说明

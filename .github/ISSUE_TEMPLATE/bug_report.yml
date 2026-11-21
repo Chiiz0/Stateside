@@ -1,0 +1,45 @@
+name: 真机问题 / ROM 兼容性反馈 (Bug Report)
+description: 反馈在某款手机、定制系统（澎湃 / ColorOS / OriginOS / MagicOS 等）或特定网络环境下遇到的问题
+title: "[Bug]: "
+labels: ["bug", "rom-compat"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈真机问题！提交前可先查阅 [国产系统真机设置指南](https://github.com/Chiiz0/Stateside/blob/main/docs/OEM_SETUP_GUIDE.md) 与 [常见问题 FAQ](https://github.com/Chiiz0/Stateside/blob/main/docs/FAQ.md)。
+
+  - type: input
+    id: device_rom
+    attributes:
+      label: 手机型号与系统版本
+      description: 请填写具体机型、ROM 名称与 Android 版本
+      placeholder: 例如：小米 15 Pro / 澎湃 HyperOS 2.0.102 / Android 16
+    validations:
+      required: true
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: 使用的特权通道
+      options:
+        - 本机无线调试（免 Root）
+        - 已 Root 直通（Magisk / KernelSU / APatch）
+        - adb tcpip 5555
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 基础开关自检
+      options:
+        - label: 已对应开启当前品牌必开项（如澎湃「USB 调试（安全设置）」/ ColorOS「禁止权限监控」）
+        - label: 已授予应用通知权限与电话状态权限
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题现象与复现步骤
+      description: 请描述具体操作步骤及界面弹窗提示文字（请隐去个人隐私信息）
+    validations:
+      required: true
