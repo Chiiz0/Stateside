@@ -44,12 +44,22 @@ class StatesideApp : Application() {
         ).apply {
             description = "展示开机自动恢复美境环境及安全启动提示"
         }
-        nm.createNotificationChannels(listOf(pairingChannel, statusChannel))
+        val companionTzChannel = NotificationChannel(
+            CHANNEL_COMPANION_TZ,
+            "动态伴随时区守护",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "在指定应用前台运行期间静默显示美区伴随时区状态与一键归位按钮"
+            enableVibration(false)
+            setSound(null, null)
+        }
+        nm.createNotificationChannels(listOf(pairingChannel, statusChannel, companionTzChannel))
     }
 
     companion object {
         const val CHANNEL_PAIRING = "stateside_wireless_pairing"
         const val CHANNEL_STATUS = "stateside_env_status"
+        const val CHANNEL_COMPANION_TZ = "stateside_companion_timezone"
 
         @Volatile
         lateinit var instance: StatesideApp

@@ -61,7 +61,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.stateside.env.model.AppThemeMode
 import app.stateside.env.model.CoreSuiteApp
+import app.stateside.env.model.TimezoneMode
 import app.stateside.env.model.UsCarrierPreset
+import app.stateside.env.model.UsTimezonePreset
 import app.stateside.env.oem.ChineseRomGuide
 import app.stateside.env.ui.components.StatesideBrandEmblem
 import app.stateside.env.ui.components.StatesideIcons
@@ -70,6 +72,7 @@ import app.stateside.env.ui.screens.DashboardScreen
 import app.stateside.env.ui.screens.EnvironmentInspectorSheet
 import app.stateside.env.ui.screens.SettingsScreen
 import app.stateside.env.ui.screens.SimStudioScreen
+import app.stateside.env.ui.screens.TimezoneStudioSheet
 
 enum class StatesideTab(
     val label: String,
@@ -116,6 +119,12 @@ fun MainScreen(
     onSelectCarrier: (UsCarrierPreset) -> Unit,
     onApplyCustomCarrierLabel: (String) -> Unit,
     onUpdateSlotDisplayOverride: (Int, String) -> Unit,
+    onSelectTimezoneMode: (TimezoneMode) -> Unit,
+    onSelectTimezonePreset: (UsTimezonePreset) -> Unit,
+    onToggleCompanionSuite: (CoreSuiteApp) -> Unit,
+    onToggleCompanionExtraPkg: (String, String) -> Unit,
+    onSwitchUsTimezoneNow: () -> Unit,
+    onRestoreHomeTimezoneNow: () -> Unit,
     onToggleAutoBoot: (Boolean) -> Unit,
     onSelectThemeMode: (AppThemeMode) -> Unit,
     onToggleDynamicColor: (Boolean) -> Unit,
@@ -135,6 +144,7 @@ fun MainScreen(
     var currentTab by rememberSaveable { mutableStateOf(StatesideTab.DASHBOARD) }
     var showOnboarding by rememberSaveable { mutableStateOf(false) }
     var showAppPicker by rememberSaveable { mutableStateOf(false) }
+    var showTimezoneStudio by rememberSaveable { mutableStateOf(false) }
     var showInspector by rememberSaveable { mutableStateOf(false) }
     var showRestoreConfirm by rememberSaveable { mutableStateOf(false) }
 
@@ -308,6 +318,8 @@ fun MainScreen(
                                         onNavigateToSimStudio = { currentTab = StatesideTab.SIM_STUDIO },
                                         onNavigateToAppEngine = { currentTab = StatesideTab.APP_ENGINE },
                                         onNavigateToSettings = { currentTab = StatesideTab.SETTINGS },
+                                        onOpenTimezoneStudio = { showTimezoneStudio = true },
+                                        onRestoreCompanionTimezoneNow = onRestoreHomeTimezoneNow,
                                         onOpenEnvironmentInspector = { showInspector = true }
                                     )
 
@@ -326,6 +338,9 @@ fun MainScreen(
                                         onApplyStateside = onApplyStateside,
                                         onSafeLaunchApp = onSafeLaunchApp,
                                         onToggleCoreSuiteApp = onToggleCoreSuiteApp,
+                                        onToggleCompanionSuite = onToggleCompanionSuite,
+                                        onToggleCompanionExtraPkg = onToggleCompanionExtraPkg,
+                                        onOpenTimezoneStudio = { showTimezoneStudio = true },
                                         onOpenAppPicker = {
                                             onOpenAppPicker()
                                             showAppPicker = true
@@ -339,6 +354,7 @@ fun MainScreen(
                                         cardPadding = cardInnerPad,
                                         onRequestPermissions = onRequestPermissions,
                                         onOpenOnboarding = { showOnboarding = true },
+                                        onOpenTimezoneStudio = { showTimezoneStudio = true },
                                         onOpenInspector = { showInspector = true },
                                         onForceReapply = onApplyStateside,
                                         onOpenRestoreConfirm = { showRestoreConfirm = true },
@@ -388,9 +404,23 @@ fun MainScreen(
         )
     }
 
+    if (showTimezoneStudio) {
+        TimezoneStudioSheet(
+            state = state,
+            onSelectMode = onSelectTimezoneMode,
+            onSelectPreset = onSelectTimezonePreset,
+            onToggleCompanionSuite = onToggleCompanionSuite,
+            onToggleCompanionExtraPkg = onToggleCompanionExtraPkg,
+            onSwitchUsTimezoneNow = onSwitchUsTimezoneNow,
+            onRestoreHomeTimezoneNow = onRestoreHomeTimezoneNow,
+            onDismiss = { showTimezoneStudio = false }
+        )
+    }
+
     if (showInspector) {
         EnvironmentInspectorSheet(
             state = state,
+            onOpenTimezoneStudio = { showTimezoneStudio = true },
             onBuildDiagnostics = onBuildDiagnostics,
             onCopiedNotice = onNotifyBanner,
             onDismiss = { showInspector = false }

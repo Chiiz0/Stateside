@@ -38,15 +38,15 @@ import app.stateside.env.model.CoreSuiteApp
 import app.stateside.env.oem.ChineseRomGuide
 import app.stateside.env.privileged.PrivilegedAction
 import app.stateside.env.shortcut.AppLaunchGuardHelper
+import app.stateside.env.timezone.CompanionTimezoneService
 import app.stateside.env.ui.components.StatesideBrandEmblem
 import app.stateside.env.ui.theme.StatesideTheme
 import kotlinx.coroutines.launch
 
 /**
  * 通用桌面「美境安全启动」透明守卫页：
- * 支持任意目标应用（TikTok / X / Claude / ChatGPT 及自定义扩展应用）：
- * 1. 若美区电话卡环境已生效，0.1 秒无感直达目标应用；
- * 2. 若手机重启后回落国内卡状态，当场拦截并花约 2 秒自动恢复美境后再拉起目标应用。
+ * 1. 若美区电话卡、en-US 与伴随时区均已就绪，0.1 秒无感直达目标应用；
+ * 2. 若需补写美区电话卡或切换「随开随切」动态伴随时区，当场自动完成后再拉起目标应用。
  */
 class SafeLaunchActivity : ComponentActivity() {
 
@@ -57,6 +57,7 @@ class SafeLaunchActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val savedPrefs = (application as StatesideApp).prefs.settings.value
         val targetPkg = intent?.getStringExtra(AppLaunchGuardHelper.EXTRA_TARGET_PKG)
             ?.takeIf { it.isNotBlank() }
             ?: CoreSuiteApp.entries.firstNotNullOfOrNull {
@@ -67,7 +68,18 @@ class SafeLaunchActivity : ComponentActivity() {
             ?.takeIf { it.isNotBlank() }
             ?: "目标应用"
 
+        val needsCompanionTz = !targetPkg.isNullOrBlank() &&
+            savedPrefs.shouldSwitchCompanionTimezoneOnLaunch(targetPkg)
+
         if (AppLaunchGuardHelper.isStatesideReadyForFastLaunch(this, targetPkg)) {
+            if (needsCompanionTz) {
+                CompanionTimezoneService.startSession(
+                    context = applicationContext,
+                    targetPackage = targetPkg,
+                    appTitle = targetTitle,
+                    zoneLabel = savedPrefs.selectedUsTimezone.cityLabel
+                )
+            }
             val launched = targetPkg != null && AppLaunchGuardHelper.launchPackageDirectly(this, targetPkg)
             if (!launched) {
                 startActivity(Intent(this, MainActivity::class.java))
@@ -76,7 +88,6 @@ class SafeLaunchActivity : ComponentActivity() {
             return
         }
 
-        val savedPrefs = (application as StatesideApp).prefs.settings.value
         setContent {
             StatesideTheme(
                 themeMode = savedPrefs.themeMode,
@@ -101,7 +112,7 @@ class SafeLaunchActivity : ComponentActivity() {
                                 StatesideBrandEmblem(size = 32.dp, isActive = false)
                                 Spacer(Modifier.width(10.dp))
                                 Text(
-                                    text = "美境安全拦截 · $targetTitle",
+                                    text = "美境安全启动 · $targetTitle",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -161,17 +172,42 @@ class SafeLaunchActivity : ComponentActivity() {
         }
 
         lifecycleScope.launch {
-            statusMessage = "检测到当前尚未处于美区卡状态，正在自动恢复美境再为您打开 $targetTitle…"
-            val result = LocalAdbManager.getInstance(applicationContext)
-                .runEnvironmentTask(PrivilegedAction.APPLY_US_ENV)
+            val baseEnvReadyWithoutCompanion = AppLaunchGuardHelper.isStatesideReadyForFastLaunch(
+                this@SafeLaunchActivity,
+                targetPackage = null
+            ) && (targetPkg == null ||
+                targetPkg !in savedPrefs.effectiveEnglishPackages() ||
+                targetPkg in savedPrefs.confirmedEnglishPackages)
+
+            val result = if (baseEnvReadyWithoutCompanion && needsCompanionTz) {
+                statusMessage = "正在为 $targetTitle 切换美区伴随时区 (${savedPrefs.selectedUsTimezone.cityLabel})…"
+                LocalAdbManager.getInstance(applicationContext).runEnvironmentTask(
+                    action = PrivilegedAction.SWITCH_US_TIMEZONE,
+                    explicitTimezoneId = savedPrefs.selectedUsTimezone.zoneId
+                )
+            } else {
+                statusMessage = "正在同步美境配置与环境后再为您打开 $targetTitle…"
+                LocalAdbManager.getInstance(applicationContext).runEnvironmentTask(
+                    action = PrivilegedAction.APPLY_US_ENV,
+                    explicitTimezoneId = if (needsCompanionTz) savedPrefs.selectedUsTimezone.zoneId else null
+                )
+            }
 
             if (result.isSuccess) {
+                if (needsCompanionTz) {
+                    CompanionTimezoneService.startSession(
+                        context = applicationContext,
+                        targetPackage = targetPkg,
+                        appTitle = targetTitle,
+                        zoneLabel = savedPrefs.selectedUsTimezone.cityLabel
+                    )
+                }
                 if (targetPkg == null || !AppLaunchGuardHelper.launchPackageDirectly(this@SafeLaunchActivity, targetPkg)) {
                     startActivity(Intent(this@SafeLaunchActivity, MainActivity::class.java))
                 }
                 finish()
             } else {
-                errorReason = "已为您拦截国内卡裸奔打开 $targetTitle！当前未能自动恢复美境：${result.exceptionOrNull()?.message ?: "无线调试未开启"}。"
+                errorReason = "未能自动完成 $targetTitle 启动前美境同步：${result.exceptionOrNull()?.message ?: "无线调试未开启"}。"
             }
         }
     }

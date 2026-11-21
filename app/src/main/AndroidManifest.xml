@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- 仅用于 127.0.0.1 本机无线调试回环连接，无任何外网请求或统计上报 -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -28,6 +29,11 @@
 
     <!-- 创建桌面「美境安全启动」快捷方式 -->
     <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
+
+    <!-- 动态伴随时区模式自动感知目标应用退出前台并归位原时区（由本机特权通道自动静默授权，无需手动跳转设置） -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:name=".StatesideApp"
@@ -68,6 +74,16 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="stateside_local_wireless_adb_pairing" />
+        </service>
+
+        <!-- 方案二：单应用「随开随切、退出即还」动态伴随时区前台守护服务 -->
+        <service
+            android:name=".timezone.CompanionTimezoneService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="stateside_companion_timezone_session" />
         </service>
 
         <!-- 开机后等待 Wi-Fi 就绪自动静默补写美境的系统调度服务 -->

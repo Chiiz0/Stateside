@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.stateside.env.BuildConfig
 import app.stateside.env.model.AppThemeMode
+import app.stateside.env.model.TimezoneMode
 import app.stateside.env.oem.ChineseRomGuide
 import app.stateside.env.ui.MainUiState
 import app.stateside.env.ui.components.SectionGroupCard
@@ -62,6 +63,7 @@ fun SettingsScreen(
     cardPadding: Dp,
     onRequestPermissions: () -> Unit,
     onOpenOnboarding: () -> Unit,
+    onOpenTimezoneStudio: () -> Unit,
     onOpenInspector: () -> Unit,
     onForceReapply: () -> Unit,
     onOpenRestoreConfirm: () -> Unit,
@@ -164,6 +166,30 @@ fun SettingsScreen(
                 subtitle = "手机重启后一旦连接已授权 Wi-Fi 自动补写美区国家码（应用英语配置永久保留）",
                 checked = state.userSettings.autoRestoreOnBoot,
                 onCheckedChange = onToggleAutoBoot
+            )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            SettingsActionRow(
+                icon = StatesideIcons.ClockTimezone,
+                title = "美区时区工作策略",
+                subtitle = when (state.userSettings.timezoneMode) {
+                    TimezoneMode.KEEP_NATIVE -> "当前保持本机原时区 · 点击可开启全局同步或单应用随开随切"
+                    TimezoneMode.GLOBAL_US -> "方案一：全局跟随美境切至 ${state.userSettings.selectedUsTimezone.chipLabel}"
+                    TimezoneMode.COMPANION_APP -> "方案二：启动指定应用前切至 ${state.userSettings.selectedUsTimezone.cityLabel}，退出自动归位"
+                },
+                badgeText = state.userSettings.timezoneMode.shortBadge,
+                badgeContainerColor = if (state.userSettings.timezoneMode == TimezoneMode.KEEP_NATIVE) {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                } else {
+                    MaterialTheme.colorScheme.secondaryContainer
+                },
+                badgeContentColor = if (state.userSettings.timezoneMode == TimezoneMode.KEEP_NATIVE) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                },
+                onClick = onOpenTimezoneStudio
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

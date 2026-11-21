@@ -6,7 +6,9 @@ import app.stateside.env.model.CoreSuiteApp
 import app.stateside.env.model.MccIsoResolver
 import app.stateside.env.model.PairingInputParser
 import app.stateside.env.model.StatesideDefaults
+import app.stateside.env.model.TimezoneMode
 import app.stateside.env.model.UsCarrierPreset
+import app.stateside.env.model.UsTimezonePreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -71,6 +73,16 @@ class StatesidePresetsTest {
         assertEquals(AppThemeMode.DARK, AppThemeMode.fromId("dark"))
         assertEquals(AppThemeMode.LIGHT, AppThemeMode.fromId("light"))
         assertFalse(perSlotSettings.useDynamicColor)
+
+        assertEquals(TimezoneMode.KEEP_NATIVE, perSlotSettings.timezoneMode)
+        assertEquals(UsTimezonePreset.LOS_ANGELES, perSlotSettings.selectedUsTimezone)
+        assertTrue(UsTimezonePreset.isManagedUsZone("America/Los_Angeles"))
+        assertFalse(UsTimezonePreset.isManagedUsZone("Asia/Shanghai"))
+        assertFalse(perSlotSettings.shouldSwitchCompanionTimezoneOnLaunch("com.zhiliaoapp.musically"))
+
+        val companionSettings = perSlotSettings.copy(timezoneMode = TimezoneMode.COMPANION_APP)
+        assertTrue(companionSettings.shouldSwitchCompanionTimezoneOnLaunch("com.zhiliaoapp.musically"))
+        assertFalse(companionSettings.shouldSwitchCompanionTimezoneOnLaunch("com.openai.chatgpt"))
     }
 
     @Test

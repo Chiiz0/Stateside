@@ -452,4 +452,29 @@ object StatesideIcons {
             }
         }.build()
     }
+
+    val ClockTimezone: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "ClockTimezone",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 2f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(12f, 3f)
+                arcTo(9f, 9f, 0f, isMoreThanHalf = true, isPositiveArc = true, 12f, 21f)
+                arcTo(9f, 9f, 0f, isMoreThanHalf = true, isPositiveArc = true, 12f, 3f)
+                close()
+                moveTo(12f, 7.2f)
+                verticalLineTo(12.2f)
+                lineTo(15.6f, 14.3f)
+            }
+        }.build()
+    }
 }

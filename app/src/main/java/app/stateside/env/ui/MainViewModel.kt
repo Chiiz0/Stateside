@@ -22,11 +22,16 @@ import app.stateside.env.data.UserSettings
 import app.stateside.env.model.AppThemeMode
 import app.stateside.env.model.CoreSuiteApp
 import app.stateside.env.model.MccIsoResolver
+import app.stateside.env.model.TimezoneMode
 import app.stateside.env.model.UsCarrierPreset
+import app.stateside.env.model.UsTimezonePreset
 import app.stateside.env.oem.ChineseRomGuide
 import app.stateside.env.oem.RomSetupGuide
 import app.stateside.env.privileged.PrivilegedAction
+import app.stateside.env.privileged.TimezoneOverrideEngine
 import app.stateside.env.shortcut.AppLaunchGuardHelper
+import app.stateside.env.timezone.CompanionTzSessionState
+import app.stateside.env.timezone.CompanionTimezoneService
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -71,14 +76,16 @@ data class CoreSuiteUiItem(
     val suiteApp: CoreSuiteApp,
     val installedPackage: String?,
     val isEnabled: Boolean,
-    val isEnglishConfirmed: Boolean
+    val isEnglishConfirmed: Boolean,
+    val isCompanionTzEnabled: Boolean
 )
 
 data class ExtraEnglishAppUiItem(
     val packageName: String,
     val appLabel: String,
     val isInstalled: Boolean,
-    val isEnglishConfirmed: Boolean
+    val isEnglishConfirmed: Boolean,
+    val isCompanionTzEnabled: Boolean
 )
 
 data class SelectableAppItem(
@@ -89,7 +96,8 @@ data class SelectableAppItem(
 data class DockAppUiItem(
     val packageName: String,
     val title: String,
-    val isEnglishConfirmed: Boolean
+    val isEnglishConfirmed: Boolean,
+    val usesCompanionTz: Boolean
 )
 
 data class MainUiState(
@@ -105,6 +113,7 @@ data class MainUiState(
     val userSettings: UserSettings = UserSettings(),
     val romGuide: RomSetupGuide = ChineseRomGuide.detectCurrentRom(),
     val pairingPhase: PairingUiPhase = PairingUiPhase.Idle,
+    val companionSession: CompanionTzSessionState = CompanionTzSessionState.Idle,
     val selectableApps: List<SelectableAppItem> = emptyList(),
     val isWorking: Boolean = false,
     val workingMessage: String = "",
@@ -158,6 +167,13 @@ data class MainUiState(
     val unconfirmedEnglishAppsCount: Int
         get() = (installedTargetEnglishAppsCount - confirmedEnglishAppsCount).coerceAtLeast(0)
 
+    val enabledCompanionAppsCount: Int
+        get() {
+            val coreComp = coreSuiteItems.count { it.isCompanionTzEnabled }
+            val extraComp = extraAppItems.count { it.isCompanionTzEnabled }
+            return coreComp + extraComp
+        }
+
     val lastAppliedFormatted: String
         get() {
             val ts = userSettings.lastAppliedTimestamp
@@ -175,7 +191,8 @@ data class MainUiState(
                     DockAppUiItem(
                         packageName = it.installedPackage!!,
                         title = it.suiteApp.title,
-                        isEnglishConfirmed = it.isEnglishConfirmed
+                        isEnglishConfirmed = it.isEnglishConfirmed,
+                        usesCompanionTz = userSettings.shouldSwitchCompanionTimezoneOnLaunch(it.installedPackage)
                     )
                 }
             val extraDock = extraAppItems
@@ -184,7 +201,8 @@ data class MainUiState(
                     DockAppUiItem(
                         packageName = it.packageName,
                         title = it.appLabel,
-                        isEnglishConfirmed = it.isEnglishConfirmed
+                        isEnglishConfirmed = it.isEnglishConfirmed,
+                        usesCompanionTz = userSettings.shouldSwitchCompanionTimezoneOnLaunch(it.packageName)
                     )
                 }
             return (coreDock + extraDock).distinctBy { it.packageName }
@@ -219,15 +237,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<MainUiState> = combine(
         internal,
         prefs.settings,
-        AdbPairingService.phase
-    ) { local, settings, phase ->
+        AdbPairingService.phase,
+        CompanionTimezoneService.sessionState
+    ) { local, settings, phase, compSession ->
         val suiteItems = CoreSuiteApp.entries.map { suite ->
             val pkg = local.installedSuiteMap[suite]
             CoreSuiteUiItem(
                 suiteApp = suite,
                 installedPackage = pkg,
                 isEnabled = settings.isSuiteAppEnabled(suite),
-                isEnglishConfirmed = pkg != null && pkg in settings.confirmedEnglishPackages
+                isEnglishConfirmed = pkg != null && pkg in settings.confirmedEnglishPackages,
+                isCompanionTzEnabled = settings.isCompanionEnabledForSuite(suite)
             )
         }
         val extraItems = settings.extraEnglishPackages.sorted().map { pkg ->
@@ -236,7 +256,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 packageName = pkg,
                 appLabel = meta?.first ?: pkg.substringAfterLast('.').replaceFirstChar { it.uppercase() },
                 isInstalled = meta?.second ?: false,
-                isEnglishConfirmed = pkg in settings.confirmedEnglishPackages
+                isEnglishConfirmed = pkg in settings.confirmedEnglishPackages,
+                isCompanionTzEnabled = settings.isCompanionEnabledForPackage(pkg)
             )
         }
         MainUiState(
@@ -252,6 +273,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             userSettings = settings,
             romGuide = romGuide,
             pairingPhase = phase,
+            companionSession = compSession,
             selectableApps = local.selectableApps,
             isWorking = local.isWorking,
             workingMessage = local.workingMessage,
@@ -333,7 +355,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun queryEnvironmentTelemetry(): EnvironmentTelemetry {
-        val tz = TimeZone.getDefault()
+        val liveZoneId = TimezoneOverrideEngine.readLiveSystemTimezone()
+        val tz = TimeZone.getTimeZone(liveZoneId)
         val offsetMillis = tz.getOffset(System.currentTimeMillis())
         val totalMinutes = abs(offsetMillis) / 60_000
         val sign = if (offsetMillis >= 0) "+" else "-"
@@ -345,7 +368,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             deviceModel = "${Build.BRAND.replaceFirstChar { it.uppercase() }} ${Build.MODEL}",
             androidRelease = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
             systemLocaleTag = sysLocale,
-            systemTimezoneId = tz.id,
+            systemTimezoneId = liveZoneId,
             systemTimezoneOffset = offsetText,
             isDeveloperOptionsEnabled = ChineseRomGuide.isDeveloperOptionsEnabled(app)
         )
@@ -378,9 +401,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun applyStatesideEnv(packageToLaunchAfter: String? = null) {
+    fun applyStatesideEnv(
+        packageToLaunchAfter: String? = null,
+        appTitleForCompanion: String? = null
+    ) {
         if (internal.value.isWorking) return
         viewModelScope.launch {
+            val settings = prefs.settings.value
+            val needsCompanionTz = !packageToLaunchAfter.isNullOrBlank() &&
+                settings.shouldSwitchCompanionTimezoneOnLaunch(packageToLaunchAfter)
+
             internal.update {
                 it.copy(
                     isWorking = true,
@@ -390,8 +420,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
 
-            val result = LocalAdbManager.getInstance(app)
-                .runEnvironmentTask(PrivilegedAction.APPLY_US_ENV)
+            val result = LocalAdbManager.getInstance(app).runEnvironmentTask(
+                action = PrivilegedAction.APPLY_US_ENV,
+                explicitTimezoneId = if (needsCompanionTz) settings.selectedUsTimezone.zoneId else null
+            )
 
             refreshSystemState()
 
@@ -405,6 +437,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 if (!packageToLaunchAfter.isNullOrBlank()) {
+                    if (needsCompanionTz) {
+                        CompanionTimezoneService.startSession(
+                            context = app,
+                            targetPackage = packageToLaunchAfter,
+                            appTitle = appTitleForCompanion ?: resolveAppDisplayTitle(packageToLaunchAfter),
+                            zoneLabel = settings.selectedUsTimezone.cityLabel
+                        )
+                    }
                     AppLaunchGuardHelper.launchPackageDirectly(app, packageToLaunchAfter)
                 }
             } else {
@@ -463,13 +503,76 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun safeLaunchTargetApp(packageName: String) {
         val state = uiState.value
-        val needsEnglishInit = packageName in state.userSettings.effectiveEnglishPackages() &&
-            packageName !in state.userSettings.confirmedEnglishPackages
+        val settings = state.userSettings
+        val appTitle = resolveAppDisplayTitle(packageName)
+        val needsEnglishInit = packageName in settings.effectiveEnglishPackages() &&
+            packageName !in settings.confirmedEnglishPackages
+        val needsCompanionTz = settings.shouldSwitchCompanionTimezoneOnLaunch(packageName)
+
         if (state.isEnvironmentReady && !needsEnglishInit) {
-            AppLaunchGuardHelper.launchPackageDirectly(app, packageName)
+            if (!needsCompanionTz) {
+                AppLaunchGuardHelper.launchPackageDirectly(app, packageName)
+                return
+            }
+            val liveTz = TimezoneOverrideEngine.readLiveSystemTimezone()
+            if (liveTz.equals(settings.selectedUsTimezone.zoneId, ignoreCase = true)) {
+                CompanionTimezoneService.startSession(
+                    context = app,
+                    targetPackage = packageName,
+                    appTitle = appTitle,
+                    zoneLabel = settings.selectedUsTimezone.cityLabel
+                )
+                AppLaunchGuardHelper.launchPackageDirectly(app, packageName)
+                return
+            }
+            // 美境双卡与语言已就绪，仅需在启动前快速切入美区伴随时区
+            if (internal.value.isWorking) return
+            viewModelScope.launch {
+                internal.update {
+                    it.copy(
+                        isWorking = true,
+                        workingMessage = "正在为 $appTitle 切入美区伴随时区 (${settings.selectedUsTimezone.cityLabel})…",
+                        errorDetail = null,
+                        toastBanner = null
+                    )
+                }
+                val result = LocalAdbManager.getInstance(app).runEnvironmentTask(
+                    action = PrivilegedAction.SWITCH_US_TIMEZONE,
+                    explicitTimezoneId = settings.selectedUsTimezone.zoneId
+                )
+                refreshSystemState()
+                if (result.isSuccess) {
+                    internal.update { it.copy(isWorking = false, workingMessage = "") }
+                    CompanionTimezoneService.startSession(
+                        context = app,
+                        targetPackage = packageName,
+                        appTitle = appTitle,
+                        zoneLabel = settings.selectedUsTimezone.cityLabel
+                    )
+                    AppLaunchGuardHelper.launchPackageDirectly(app, packageName)
+                } else {
+                    internal.update {
+                        it.copy(
+                            isWorking = false,
+                            workingMessage = "",
+                            errorDetail = result.exceptionOrNull()?.message ?: "伴随时区切换失败，请确认无线调试已开启"
+                        )
+                    }
+                }
+            }
         } else {
-            applyStatesideEnv(packageToLaunchAfter = packageName)
+            applyStatesideEnv(
+                packageToLaunchAfter = packageName,
+                appTitleForCompanion = appTitle
+            )
         }
+    }
+
+    private fun resolveAppDisplayTitle(packageName: String): String {
+        val s = uiState.value
+        s.coreSuiteItems.firstOrNull { it.installedPackage == packageName }?.let { return it.suiteApp.title }
+        s.extraAppItems.firstOrNull { it.packageName == packageName }?.let { return it.appLabel }
+        return packageName.substringAfterLast('.').replaceFirstChar { it.uppercase() }
     }
 
     fun restoreToDomesticDefault() {
@@ -478,7 +581,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             internal.update {
                 it.copy(
                     isWorking = true,
-                    workingMessage = "正在执行两步无损还原，恢复真实归属地与跟随系统语言…",
+                    workingMessage = "正在执行无损还原，恢复真实归属地、原机时区与跟随系统语言…",
                     errorDetail = null,
                     toastBanner = null
                 )
@@ -505,6 +608,158 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         errorDetail = result.exceptionOrNull()?.message ?: "还原未完成，请确认无线调试已开启"
                     )
                 }
+            }
+        }
+    }
+
+    fun selectTimezoneMode(mode: TimezoneMode) {
+        prefs.setTimezoneMode(mode)
+        val state = uiState.value
+        when (mode) {
+            TimezoneMode.GLOBAL_US -> {
+                CompanionTimezoneService.stopQuietly(app)
+                if (state.hasPrivilegeChannel && state.isEnvironmentReady && !internal.value.isWorking) {
+                    switchUsTimezoneNow()
+                } else {
+                    internal.update {
+                        it.copy(toastBanner = "已设为「全局跟随美境切时区」；开启美境时将同步切至 ${state.userSettings.selectedUsTimezone.cityLabel}")
+                    }
+                }
+            }
+
+            TimezoneMode.KEEP_NATIVE -> {
+                CompanionTimezoneService.stopQuietly(app)
+                if (state.hasPrivilegeChannel && (state.userSettings.isTimezoneOverridden || state.telemetry.isUsTimezone) && !internal.value.isWorking) {
+                    restoreHomeTimezoneNow()
+                } else {
+                    internal.update { it.copy(toastBanner = "已设为「保持本机原时区」") }
+                }
+            }
+
+            TimezoneMode.COMPANION_APP -> {
+                if (state.hasPrivilegeChannel &&
+                    state.userSettings.isTimezoneOverridden &&
+                    state.companionSession is CompanionTzSessionState.Idle &&
+                    !internal.value.isWorking
+                ) {
+                    restoreHomeTimezoneNow(customSuccessBanner = "已启用「随开随切」动态伴随模式，平时保持原机时区")
+                } else {
+                    internal.update {
+                        it.copy(toastBanner = "已启用方案二「随开随切 · 退出即还」，从快启坞或桌面守卫图标打开目标应用即自动生效")
+                    }
+                }
+            }
+        }
+    }
+
+    fun selectUsTimezonePreset(preset: UsTimezonePreset) {
+        prefs.setSelectedUsTimezone(preset)
+        val state = uiState.value
+        val shouldApplyImmediately = state.hasPrivilegeChannel && !internal.value.isWorking && (
+            (state.userSettings.timezoneMode == TimezoneMode.GLOBAL_US && state.isEnvironmentReady) ||
+                state.companionSession is CompanionTzSessionState.Active
+            )
+        if (shouldApplyImmediately) {
+            switchUsTimezoneNow()
+        } else {
+            internal.update {
+                it.copy(toastBanner = "已选定目标美区时区：${preset.chipLabel}")
+            }
+        }
+    }
+
+    fun switchUsTimezoneNow() {
+        if (internal.value.isWorking) return
+        viewModelScope.launch {
+            val preset = prefs.settings.value.selectedUsTimezone
+            internal.update {
+                it.copy(
+                    isWorking = true,
+                    workingMessage = "正在切换系统时区至 ${preset.chipLabel}…",
+                    errorDetail = null,
+                    toastBanner = null
+                )
+            }
+            val result = LocalAdbManager.getInstance(app).runEnvironmentTask(
+                action = PrivilegedAction.SWITCH_US_TIMEZONE,
+                explicitTimezoneId = preset.zoneId
+            )
+            refreshSystemState()
+            if (result.isSuccess) {
+                internal.update {
+                    it.copy(
+                        isWorking = false,
+                        workingMessage = "",
+                        toastBanner = result.getOrThrow().summaryText
+                    )
+                }
+            } else {
+                internal.update {
+                    it.copy(
+                        isWorking = false,
+                        workingMessage = "",
+                        errorDetail = result.exceptionOrNull()?.message ?: "时区切换未成功，请确认无线调试处于开启状态"
+                    )
+                }
+            }
+        }
+    }
+
+    fun restoreHomeTimezoneNow(customSuccessBanner: String? = null) {
+        if (internal.value.isWorking) return
+        CompanionTimezoneService.stopQuietly(app)
+        viewModelScope.launch {
+            internal.update {
+                it.copy(
+                    isWorking = true,
+                    workingMessage = "正在归位本机原时区…",
+                    errorDetail = null,
+                    toastBanner = null
+                )
+            }
+            val result = LocalAdbManager.getInstance(app)
+                .runEnvironmentTask(PrivilegedAction.RESTORE_HOME_TIMEZONE)
+            refreshSystemState()
+            if (result.isSuccess) {
+                internal.update {
+                    it.copy(
+                        isWorking = false,
+                        workingMessage = "",
+                        toastBanner = customSuccessBanner ?: result.getOrThrow().summaryText
+                    )
+                }
+            } else {
+                internal.update {
+                    it.copy(
+                        isWorking = false,
+                        workingMessage = "",
+                        errorDetail = result.exceptionOrNull()?.message ?: "时区归位未完成，请确认无线调试处于开启状态"
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleCompanionTimezoneForSuite(suite: CoreSuiteApp) {
+        val wasKeepNative = prefs.settings.value.timezoneMode == TimezoneMode.KEEP_NATIVE
+        prefs.toggleCompanionTimezoneSuite(suite)
+        val nowEnabled = prefs.settings.value.isCompanionEnabledForSuite(suite)
+        if (nowEnabled && wasKeepNative) {
+            prefs.setTimezoneMode(TimezoneMode.COMPANION_APP)
+            internal.update {
+                it.copy(toastBanner = "已为 ${suite.title} 开启「随开随切」动态伴随时区")
+            }
+        }
+    }
+
+    fun toggleCompanionTimezoneForPackage(packageName: String, appLabel: String) {
+        val wasKeepNative = prefs.settings.value.timezoneMode == TimezoneMode.KEEP_NATIVE
+        prefs.toggleCompanionTimezonePackage(packageName)
+        val nowEnabled = prefs.settings.value.isCompanionEnabledForPackage(packageName)
+        if (nowEnabled && wasKeepNative) {
+            prefs.setTimezoneMode(TimezoneMode.COMPANION_APP)
+            internal.update {
+                it.copy(toastBanner = "已为 $appLabel 开启「随开随切」动态伴随时区")
             }
         }
     }
@@ -628,8 +883,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             appendLine("ROM 识别：${s.romGuide.brandTitle}")
             appendLine("特权通道：${s.privilegeChannelTitle} (已配对=${s.userSettings.isAdbPaired}, Root=${s.hasRootAccess}, 开发者选项=${s.telemetry.isDeveloperOptionsEnabled})")
             appendLine("双卡状态：$simSummary")
-            appendLine("系统语言与时区：${s.telemetry.systemLocaleTag} · ${s.telemetry.systemTimezoneId} (${s.telemetry.systemTimezoneOffset})")
-            appendLine("英语锁定应用：已锁定 ${s.confirmedEnglishAppsCount}/${s.installedTargetEnglishAppsCount} 款（扩展应用 ${s.userSettings.extraEnglishPackages.size} 款）")
+            appendLine("时区策略：${s.userSettings.timezoneMode.shortBadge} (目标=${s.userSettings.selectedUsTimezone.zoneId}, 当前生效=${s.telemetry.systemTimezoneId} ${s.telemetry.systemTimezoneOffset})")
+            appendLine("系统与应用语言：系统=${s.telemetry.systemLocaleTag}, 已锁定英语应用=${s.confirmedEnglishAppsCount}/${s.installedTargetEnglishAppsCount} 款")
             append("权限核查：电话=${s.hasPhonePermission}, 通知=${s.hasNotificationPermission}, 本地网络=${s.hasLocalNetworkPermission}")
         }
     }

@@ -300,7 +300,8 @@ class LocalAdbManager private constructor(context: Context) : AbsAdbConnectionMa
     suspend fun runEnvironmentTask(
         action: PrivilegedAction,
         carrier: UsCarrierPreset? = null,
-        targetPackagesOverride: List<String>? = null
+        targetPackagesOverride: List<String>? = null,
+        explicitTimezoneId: String? = null
     ): Result<EnvExecutionReport> = execMutex.withLock {
         withContext(Dispatchers.IO) {
             runCatching {
@@ -309,28 +310,42 @@ class LocalAdbManager private constructor(context: Context) : AbsAdbConnectionMa
                 val effectiveCarrier = carrier ?: currentSettings.selectedCarrier
 
                 val packagesToProcess = when {
-                    targetPackagesOverride != null -> targetPackagesOverride
+                    action == PrivilegedAction.SWITCH_US_TIMEZONE ||
+                        action == PrivilegedAction.RESTORE_HOME_TIMEZONE -> ""
+                    targetPackagesOverride != null -> targetPackagesOverride.joinToString(",")
                     action == PrivilegedAction.RESTORE_CN_DEFAULT -> {
                         // 恢复默认时将内置四大应用及用户曾勾选的全部扩展应用一并还原为跟随系统中文
                         (CoreSuiteApp.ALL_BUILTIN_PACKAGES +
                             currentSettings.extraEnglishPackages +
-                            currentSettings.confirmedEnglishPackages).toList()
+                            currentSettings.confirmedEnglishPackages)
+                            .map { it.trim() }
+                            .filter { StatesideDefaults.isValidPackageName(it) }
+                            .distinct()
+                            .joinToString(",")
                     }
                     else -> currentSettings.effectiveEnglishPackages()
+                        .map { it.trim() }
+                        .filter { StatesideDefaults.isValidPackageName(it) }
+                        .distinct()
+                        .joinToString(",")
                 }
-                    .map { it.trim() }
-                    .filter { StatesideDefaults.isValidPackageName(it) }
-                    .distinct()
-                    .joinToString(",")
 
+                val pkg = appContext.packageName
                 val cmd = buildString {
+                    append("pm grant ").append(pkg).append(" android.permission.PACKAGE_USAGE_STATS >/dev/null 2>&1; ")
+                    append("cmd appops set ").append(pkg).append(" GET_USAGE_STATS allow >/dev/null 2>&1; ")
                     append("am instrument -w --no-restart ")
                     append("-e action ").append(action.name).append(' ')
                     if (carrier != null) {
                         append("-e carrier_id ").append(effectiveCarrier.id).append(' ')
                     }
-                    append("-e target_pkgs '").append(packagesToProcess).append("' ")
-                    append("${appContext.packageName}/.privileged.StatesideEnvInstrumentation")
+                    if (!explicitTimezoneId.isNullOrBlank()) {
+                        append("-e tz_id '").append(explicitTimezoneId.trim()).append("' ")
+                    }
+                    if (packagesToProcess.isNotEmpty()) {
+                        append("-e target_pkgs '").append(packagesToProcess).append("' ")
+                    }
+                    append("$pkg/.privileged.StatesideEnvInstrumentation")
                 }
 
                 val deferred = PrivilegedResultBus.prepareNewRun(appContext)
@@ -371,6 +386,8 @@ class LocalAdbManager private constructor(context: Context) : AbsAdbConnectionMa
                         repo.recordRestoredDefault()
                         BootRestoreJobService.cancelPending(appContext)
                     }
+                    PrivilegedAction.SWITCH_US_TIMEZONE,
+                    PrivilegedAction.RESTORE_HOME_TIMEZONE -> Unit
                 }
                 syncGlobalPrefs()
                 report

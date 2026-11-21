@@ -7,14 +7,18 @@ import android.os.Bundle
 import app.stateside.env.StatesideApp
 import app.stateside.env.data.UserPrefsRepository
 import app.stateside.env.model.CoreSuiteApp
+import app.stateside.env.model.TimezoneMode
 import app.stateside.env.model.UsCarrierPreset
+import app.stateside.env.timezone.CompanionTzSessionState
+import app.stateside.env.timezone.CompanionTimezoneService
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 
 /**
  * 美境（Stateside）单进程一体化特权批处理入口：
  * 运行在 app.stateside.env 自身进程 UID 下，借用 UiAutomation.adoptShellPermissionIdentity() 一次性完成：
  * 1. 双卡美国运营商 (US) 覆盖与读回核验；
- * 2. TikTok、X、Claude、ChatGPT 及扩展应用组强制设为美国英语 en-US。
+ * 2. TikTok、X、Claude、ChatGPT 及扩展应用组强制设为美国英语 en-US；
+ * 3. 美区全局时区或单应用动态伴随时区切换与原时区归位。
  */
 class StatesideEnvInstrumentation : Instrumentation() {
 
@@ -37,7 +41,9 @@ class StatesideEnvInstrumentation : Instrumentation() {
         val cliCarrier = carrierArg?.let { UsCarrierPreset.fromId(it) }
         val cliSlot0Label = arguments.getString("slot0_label")
         val cliSlot1Label = arguments.getString("slot1_label")
-        val savedSettings = UserPrefsRepository(ctx).settings.value
+        val explicitZoneArg = arguments.getString("tz_id")?.takeIf { it.isNotBlank() }
+        val repo = UserPrefsRepository(ctx)
+        val savedSettings = repo.settings.value
         val targetPkgs = arguments.getString("target_pkgs")
             ?.split(',')
             ?.map { it.trim() }
@@ -47,18 +53,17 @@ class StatesideEnvInstrumentation : Instrumentation() {
 
         var uiAutomation: UiAutomation? = null
         val report = try {
-            // 使用 FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES 避免中断用户手机上的无障碍服务（如李跳跳/GKD/密码管理器）
             uiAutomation = runCatching {
                 getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
             }.getOrNull()
 
             if (uiAutomation == null) {
-                // 清理可能处于半连接 CONNECTING 状态的内部 mUiAutomation 字段，防止 finish() 时抛出 IllegalStateException 崩溃
                 clearBrokenUiAutomationField()
-                error("系统拒绝建立 UiAutomation 特权委托通道，请在开发者选项中开启「USB 调试（安全设置）」或「禁止权限监控」后重试")
+                error("系统拒绝建立 UiAutomation 特权委托通道，请在开发者选项中开启「USB 调试（安全设置）」或检查无线调试状态后重试")
             }
 
             uiAutomation.adoptShellPermissionIdentity()
+            TimezoneOverrideEngine.grantUsageStatsAppOpToSelf(ctx)
 
             when (action) {
                 PrivilegedAction.APPLY_US_ENV -> {
@@ -75,6 +80,25 @@ class StatesideEnvInstrumentation : Instrumentation() {
                         forceStopAfterApply = true
                     )
 
+                    val tzTail = when {
+                        explicitZoneArg != null -> {
+                            val tzRes = TimezoneOverrideEngine.applyUsTimezone(ctx, repo, explicitZoneArg)
+                            if (tzRes.success) " · 伴随时区已切至 ${tzRes.activeZoneId}" else ""
+                        }
+                        savedSettings.timezoneMode == TimezoneMode.GLOBAL_US -> {
+                            val targetZone = savedSettings.selectedUsTimezone.zoneId
+                            val tzRes = TimezoneOverrideEngine.applyUsTimezone(ctx, repo, targetZone)
+                            if (tzRes.success) " · 全局时区已切至 ${savedSettings.selectedUsTimezone.cityLabel}" else ""
+                        }
+                        savedSettings.isTimezoneOverridden &&
+                            CompanionTimezoneService.sessionState.value is CompanionTzSessionState.Idle -> {
+                            // 若用户已从全局时区切回“保持本机”或开机自愈时无伴随会话，自动将残留的美区时区归位
+                            TimezoneOverrideEngine.restoreHomeTimezone(ctx, repo)
+                            ""
+                        }
+                        else -> ""
+                    }
+
                     val hasNoSim = simResults.isEmpty()
                     val allSimsOk = simResults.isNotEmpty() && simResults.all { it.success }
                     val firstError = simResults.firstOrNull { !it.success }?.error.orEmpty()
@@ -83,9 +107,9 @@ class StatesideEnvInstrumentation : Instrumentation() {
                         "卡${it.slotIndex + 1}:${it.currentCarrierName}"
                     }
                     val summary = when {
-                        hasNoSim -> "无插卡模式就绪，已将 ${updatedPkgs.size} 款已安装应用锁定为美国英语 (en-US)"
+                        hasNoSim -> "无插卡模式就绪，已将 ${updatedPkgs.size} 款应用锁定为美式英语$tzTail"
                         allSimsOk -> {
-                            "已将 ${simResults.size} 张电话卡设为美国区域 ($carrierSummary)，并驱动 ${updatedPkgs.size} 款应用为美国英语"
+                            "已将 ${simResults.size} 张电话卡设为美国区域 ($carrierSummary)，驱动 ${updatedPkgs.size} 款英语应用$tzTail"
                         }
                         else -> "部分卡槽覆盖未通过：$firstError"
                     }
@@ -106,6 +130,9 @@ class StatesideEnvInstrumentation : Instrumentation() {
                         context = ctx,
                         candidatePackages = targetPkgs
                     )
+                    TimezoneOverrideEngine.restoreHomeTimezone(ctx, repo)
+                    CompanionTimezoneService.stopQuietly(ctx)
+
                     val ok = simResults.all { it.success }
                     val firstErr = simResults.firstOrNull { !it.success }?.error.orEmpty()
 
@@ -114,8 +141,41 @@ class StatesideEnvInstrumentation : Instrumentation() {
                         overallSuccess = ok,
                         simOutcomes = simResults,
                         updatedEnglishPackages = resetPkgs,
-                        summaryText = "已恢复电话卡真实归属地，并将 ${resetPkgs.size} 款应用还原为跟随系统中文",
+                        summaryText = "已恢复电话卡真实归属地、原机时区，并将 ${resetPkgs.size} 款应用还原为跟随系统中文",
                         errorMessage = firstErr
+                    )
+                }
+
+                PrivilegedAction.SWITCH_US_TIMEZONE -> {
+                    val zoneToApply = explicitZoneArg ?: savedSettings.selectedUsTimezone.zoneId
+                    val tzRes = TimezoneOverrideEngine.applyUsTimezone(ctx, repo, zoneToApply)
+                    EnvExecutionReport(
+                        action = action,
+                        overallSuccess = tzRes.success,
+                        simOutcomes = emptyList(),
+                        updatedEnglishPackages = emptyList(),
+                        summaryText = if (tzRes.success) {
+                            "系统时区已切换至 ${savedSettings.selectedUsTimezone.chipLabel}"
+                        } else {
+                            "切换美区时区失败"
+                        },
+                        errorMessage = tzRes.error
+                    )
+                }
+
+                PrivilegedAction.RESTORE_HOME_TIMEZONE -> {
+                    val tzRes = TimezoneOverrideEngine.restoreHomeTimezone(ctx, repo)
+                    EnvExecutionReport(
+                        action = action,
+                        overallSuccess = tzRes.success,
+                        simOutcomes = emptyList(),
+                        updatedEnglishPackages = emptyList(),
+                        summaryText = if (tzRes.success) {
+                            "已自动归位原时区 (${tzRes.activeZoneId})"
+                        } else {
+                            "归位原时区失败"
+                        },
+                        errorMessage = tzRes.error
                     )
                 }
             }
@@ -135,10 +195,11 @@ class StatesideEnvInstrumentation : Instrumentation() {
 
         if (report.overallSuccess) {
             runCatching {
-                val repo = UserPrefsRepository(ctx)
                 when (action) {
                     PrivilegedAction.APPLY_US_ENV -> repo.recordAppliedSuccess(report.updatedEnglishPackages)
                     PrivilegedAction.RESTORE_CN_DEFAULT -> repo.recordRestoredDefault()
+                    PrivilegedAction.SWITCH_US_TIMEZONE,
+                    PrivilegedAction.RESTORE_HOME_TIMEZONE -> Unit
                 }
                 StatesideApp.instance.prefs.reload()
             }

@@ -21,6 +21,8 @@ import app.stateside.env.R
 import app.stateside.env.adb.LocalAdbManager
 import app.stateside.env.data.UserPrefsRepository
 import app.stateside.env.model.CoreSuiteApp
+import app.stateside.env.privileged.TimezoneOverrideEngine
+import app.stateside.env.timezone.CompanionTimezoneService
 import app.stateside.env.ui.SafeLaunchActivity
 
 object AppLaunchGuardHelper {
@@ -65,6 +67,13 @@ object AppLaunchGuardHelper {
         ) {
             // 目标应用（如刚从 Play 商店新装的 TikTok）尚未完成 en-US 锁定，先拦截补写一次英语与美区配置
             return false
+        }
+        if (!targetPackage.isNullOrBlank() && prefs.shouldSwitchCompanionTimezoneOnLaunch(targetPackage)) {
+            val liveTz = TimezoneOverrideEngine.readLiveSystemTimezone()
+            if (!liveTz.equals(prefs.selectedUsTimezone.zoneId, ignoreCase = true)) {
+                // 目标应用启用了「随开随切」动态伴随时区，且当前尚未处于目标美区时区，先拦截切换时区再拉起应用
+                return false
+            }
         }
         val hasChannel = prefs.isAdbPaired || LocalAdbManager.getInstance(context).cachedHasRootAccess()
         val bootCount = UserPrefsRepository.readCurrentBootCount(context)

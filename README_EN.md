@@ -22,6 +22,7 @@
 
 - Keeps your **system UI language unchanged** (e.g., Simplified Chinese) while automatically locking **TikTok, X, Claude, ChatGPT**, and any user-selected apps to **`en-US` (US English)**—including cloned Dual-App profiles (`user 999`) and Google Play Dynamic Delivery language splits (`split_config.en.apk`).
 - Spoofs active Dual-SIM country ISO at runtime to **US (`us`) while keeping your original status-bar carrier display untouched by default**—or lets you customize status-bar text **per SIM slot** (e.g., `X` / `Zero` / `T-Mobile`), cleanly overriding even **5G SA NAS NITZ VIP network labels** (such as China Mobile GoTone Diamond cards) via 3GPP `EF_PNN` injection without Root.
+- Includes a **Dual-Mode US Timezone Engine** (`America/Los_Angeles`, `America/New_York`, etc.): choose **Keep Native Timezone** (default), **Global US Timezone Sync**, or **Per-App Companion Mode** (switches to US timezone automatically right before launching TikTok/selected apps and silently restores your home timezone ~4s after you exit).
 - Natively overcomes **Android 15 QPR / Android 16 / Android 17 `CVE-2025-48617`** (`SecurityException: overrideConfig cannot be invoked by shell`) via in-process `Instrumentation` (`am instrument -w --no-restart`) + `UiAutomation.adoptShellPermissionIdentity()` running under the app's own `10xxx` UID.
 
 ---

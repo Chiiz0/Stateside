@@ -45,6 +45,7 @@ import app.stateside.env.ui.components.StatusPillBadge
 @Composable
 fun EnvironmentInspectorSheet(
     state: MainUiState,
+    onOpenTimezoneStudio: () -> Unit,
     onBuildDiagnostics: () -> String,
     onCopiedNotice: (String) -> Unit,
     onDismiss: () -> Unit
@@ -184,15 +185,27 @@ fun EnvironmentInspectorSheet(
                         label = "当前时区 ID",
                         value = "${state.telemetry.systemTimezoneId} (${state.telemetry.systemTimezoneOffset})"
                     )
-                    Text(
-                        text = "提示：绝大多数 AI 与社交应用无需更改手机时区；若个别严格风控场景需对齐美西/美东时间，可按需前往系统设置调整。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    InspectorKeyValueRow(
+                        label = "美境时区策略",
+                        value = "${state.userSettings.timezoneMode.title}"
                     )
-                    TextButton(
-                        onClick = { ChineseRomGuide.openDateTimeSettings(context) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("打开系统「日期与时间」设置")
+                        FilledTonalButton(
+                            onClick = {
+                                onDismiss()
+                                onOpenTimezoneStudio()
+                            }
+                        ) {
+                            Text("配置美境时区引擎")
+                        }
+                        TextButton(
+                            onClick = { ChineseRomGuide.openDateTimeSettings(context) }
+                        ) {
+                            Text("系统时间设置")
+                        }
                     }
                 }
 

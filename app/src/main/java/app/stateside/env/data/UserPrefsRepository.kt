@@ -5,7 +5,9 @@ import android.provider.Settings
 import app.stateside.env.model.AppThemeMode
 import app.stateside.env.model.CoreSuiteApp
 import app.stateside.env.model.StatesideDefaults
+import app.stateside.env.model.TimezoneMode
 import app.stateside.env.model.UsCarrierPreset
+import app.stateside.env.model.UsTimezonePreset
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,17 +18,19 @@ data class UserSettings(
     val manualConnectPort: Int = 0,
     val selectedCarrier: UsCarrierPreset = UsCarrierPreset.US_KEEP_CARRIER,
     val customCarrierLabel: String = "X",
-    // 单卡槽独立显示名覆盖：空串代表跟随全局模式；"__KEEP_NATIVE__" 代表该卡强制保留原运营商；其余非空值代表该卡单独显示为指定文案（如卡1单独显示为 "X"）
     val slot0DisplayOverride: String = "",
     val slot1DisplayOverride: String = "",
+    val timezoneMode: TimezoneMode = TimezoneMode.KEEP_NATIVE,
+    val selectedUsTimezone: UsTimezonePreset = UsTimezonePreset.LOS_ANGELES,
+    val companionTimezonePackages: Set<String> = CoreSuiteApp.TIKTOK.packageNames.toSet(),
+    val savedHomeTimezoneId: String = "Asia/Shanghai",
+    val savedHomeAutoTimezone: Boolean = true,
+    val isTimezoneOverridden: Boolean = false,
     val autoRestoreOnBoot: Boolean = true,
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     val useDynamicColor: Boolean = false,
-    // 记录用户当前期望处于美境（开启美境时置 true，主动执行「恢复国内默认」时置 false）
     val isStatesideDesired: Boolean = false,
-    // 记录最近一次成功执行美境覆盖时的系统 BOOT_COUNT，避免未授电话权限时误判已生效
     val appliedBootCount: Int = -1,
-    // 默认为空集合，代表 TikTok、X、Claude、ChatGPT 四大预设应用开箱全部自动勾选启用
     val disabledSuiteIds: Set<String> = emptySet(),
     val extraEnglishPackages: Set<String> = emptySet(),
     val confirmedEnglishPackages: Set<String> = emptySet(),
@@ -37,17 +41,21 @@ data class UserSettings(
     fun effectiveEnglishPackages(): List<String> =
         StatesideDefaults.buildTargetEnglishPackages(disabledSuiteIds, extraEnglishPackages)
 
+    fun isCompanionEnabledForPackage(packageName: String): Boolean =
+        packageName in companionTimezonePackages
+
+    fun isCompanionEnabledForSuite(suite: CoreSuiteApp): Boolean =
+        suite.packageNames.any { it in companionTimezonePackages }
+
+    fun shouldSwitchCompanionTimezoneOnLaunch(packageName: String): Boolean =
+        timezoneMode == TimezoneMode.COMPANION_APP && packageName in companionTimezonePackages
+
     fun slotOverrideFor(slotIndex: Int): String = when (slotIndex) {
         0 -> slot0DisplayOverride
         1 -> slot1DisplayOverride
         else -> ""
     }
 
-    /**
-     * 解析指定卡槽（0=卡1，1=卡2）最终期望呈现的运营商显示名：
-     * - 返回 `null`：该卡槽保持原运营商名称不覆盖（仅将 SIM 国家码设为 us）；
-     * - 返回非空字符串（如 `"X"` / `"T-Mobile"`）：强力覆盖该卡槽的 SPN 与 PNN（含穿透移动全球通钻卡 5G NITZ 显标）。
-     */
     fun resolveTargetCarrierLabelForSlot(slotIndex: Int): String? {
         val perSlot = slotOverrideFor(slotIndex).trim()
         if (perSlot == UserPrefsRepository.SLOT_KEEP_NATIVE_TOKEN) return null
@@ -60,12 +68,6 @@ data class UserSettings(
         }
     }
 
-    /**
-     * 严谨判断当前真机是否已处于美境就绪状态：
-     * 1. 若已获电话状态权限且手机插有实体卡/eSIM：必须所有激活卡槽均对外上报为 US；
-     * 2. 若已获电话状态权限且确实无卡（Wi-Fi 平板/备用机）：需用户曾成功执行过美境驱动；
-     * 3. 若尚未授予电话状态权限：仅当本次开机周期（BOOT_COUNT 匹配）内特权组件已核验写入成功时才视为就绪，彻底杜绝无权限时误判放行！
-     */
     fun isReadyForCurrentSession(
         hasPrivilegeChannel: Boolean,
         hasPhonePermission: Boolean,
@@ -86,10 +88,6 @@ data class UserSettings(
     }
 }
 
-/**
- * 使用 Device-Protected Storage 存储配置，确保手机重启后尚未解锁屏幕（LOCKED_BOOT_COMPLETED）时，
- * 后台自愈组件也能正常读取用户偏好与上次无线调试端口。
- */
 class UserPrefsRepository(context: Context) {
 
     private val appContext = context.applicationContext
@@ -104,11 +102,20 @@ class UserPrefsRepository(context: Context) {
         val customLabel = prefs.getString(KEY_CUSTOM_CARRIER_LABEL, "X")?.trim().orEmpty().ifEmpty { "X" }
         val slot0Override = prefs.getString(KEY_SLOT0_OVERRIDE, "").orEmpty()
         val slot1Override = prefs.getString(KEY_SLOT1_OVERRIDE, "").orEmpty()
+        val tzModeId = prefs.getString(KEY_TZ_MODE, TimezoneMode.KEEP_NATIVE.id)
+        val tzPresetId = prefs.getString(KEY_TZ_PRESET, UsTimezonePreset.LOS_ANGELES.id)
+        val companionSet = prefs.getStringSet(KEY_COMPANION_TZ_PKGS, null)?.toSet()
+            ?: CoreSuiteApp.TIKTOK.packageNames.toSet()
+        val homeTzId = prefs.getString(KEY_HOME_TZ_ID, "Asia/Shanghai").orEmpty().ifBlank { "Asia/Shanghai" }
+        val homeAutoTz = prefs.getBoolean(KEY_HOME_AUTO_TZ, true)
+        val tzOverridden = prefs.getBoolean(KEY_TZ_OVERRIDDEN, false)
+
         val disabledSet = prefs.getStringSet(KEY_DISABLED_SUITE_IDS, emptySet())?.toSet() ?: emptySet()
         val extraSet = prefs.getStringSet(KEY_EXTRA_ENGLISH_PKGS, emptySet())?.toSet() ?: emptySet()
         val confirmedSet = prefs.getStringSet(KEY_CONFIRMED_ENGLISH_PKGS, emptySet())?.toSet() ?: emptySet()
         val lastAppliedTs = prefs.getLong(KEY_LAST_APPLIED_TS, 0L)
         val themeId = prefs.getString(KEY_THEME_MODE, AppThemeMode.SYSTEM.id)
+
         return UserSettings(
             isAdbPaired = prefs.getBoolean(KEY_PAIRED, false),
             lastConnectPort = prefs.getInt(KEY_LAST_PORT, 0),
@@ -117,6 +124,12 @@ class UserPrefsRepository(context: Context) {
             customCarrierLabel = customLabel,
             slot0DisplayOverride = slot0Override,
             slot1DisplayOverride = slot1Override,
+            timezoneMode = TimezoneMode.fromId(tzModeId),
+            selectedUsTimezone = UsTimezonePreset.fromId(tzPresetId),
+            companionTimezonePackages = companionSet,
+            savedHomeTimezoneId = homeTzId,
+            savedHomeAutoTimezone = homeAutoTz,
+            isTimezoneOverridden = tzOverridden,
             autoRestoreOnBoot = prefs.getBoolean(KEY_AUTO_BOOT, true),
             themeMode = AppThemeMode.fromId(themeId),
             useDynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, false),
@@ -174,6 +187,53 @@ class UserPrefsRepository(context: Context) {
             rawOverride.trim().take(24)
         }
         prefs.edit().putString(key, clean).apply()
+        _settings.value = load()
+    }
+
+    fun setTimezoneMode(mode: TimezoneMode) {
+        prefs.edit().putString(KEY_TZ_MODE, mode.id).apply()
+        _settings.value = load()
+    }
+
+    fun setSelectedUsTimezone(preset: UsTimezonePreset) {
+        prefs.edit().putString(KEY_TZ_PRESET, preset.id).apply()
+        _settings.value = load()
+    }
+
+    fun toggleCompanionTimezoneSuite(suite: CoreSuiteApp) {
+        val current = _settings.value.companionTimezonePackages.toMutableSet()
+        val anyEnabled = suite.packageNames.any { it in current }
+        if (anyEnabled) {
+            current.removeAll(suite.packageNames.toSet())
+        } else {
+            current.addAll(suite.packageNames)
+        }
+        prefs.edit().putStringSet(KEY_COMPANION_TZ_PKGS, current).apply()
+        _settings.value = load()
+    }
+
+    fun toggleCompanionTimezonePackage(packageName: String) {
+        val current = _settings.value.companionTimezonePackages.toMutableSet()
+        if (!current.add(packageName)) {
+            current.remove(packageName)
+        }
+        prefs.edit().putStringSet(KEY_COMPANION_TZ_PKGS, current).apply()
+        _settings.value = load()
+    }
+
+    fun captureHomeTimezoneBaselineIfNeeded(currentZoneId: String, currentAutoTz: Boolean) {
+        val clean = currentZoneId.trim()
+        if (clean.isNotEmpty() && !UsTimezonePreset.isManagedUsZone(clean)) {
+            prefs.edit()
+                .putString(KEY_HOME_TZ_ID, clean)
+                .putBoolean(KEY_HOME_AUTO_TZ, currentAutoTz)
+                .apply()
+            _settings.value = load()
+        }
+    }
+
+    fun markTimezoneOverridden(overridden: Boolean) {
+        prefs.edit().putBoolean(KEY_TZ_OVERRIDDEN, overridden).apply()
         _settings.value = load()
     }
 
@@ -235,6 +295,7 @@ class UserPrefsRepository(context: Context) {
         prefs.edit()
             .putBoolean(KEY_STATESIDE_DESIRED, false)
             .putInt(KEY_APPLIED_BOOT_COUNT, -1)
+            .putBoolean(KEY_TZ_OVERRIDDEN, false)
             .putStringSet(KEY_CONFIRMED_ENGLISH_PKGS, emptySet())
             .apply()
         _settings.value = load()
@@ -250,6 +311,12 @@ class UserPrefsRepository(context: Context) {
         private const val KEY_CUSTOM_CARRIER_LABEL = "custom_carrier_label"
         private const val KEY_SLOT0_OVERRIDE = "slot0_display_override"
         private const val KEY_SLOT1_OVERRIDE = "slot1_display_override"
+        private const val KEY_TZ_MODE = "timezone_mode"
+        private const val KEY_TZ_PRESET = "selected_us_timezone"
+        private const val KEY_COMPANION_TZ_PKGS = "companion_tz_packages"
+        private const val KEY_HOME_TZ_ID = "saved_home_timezone_id"
+        private const val KEY_HOME_AUTO_TZ = "saved_home_auto_tz"
+        private const val KEY_TZ_OVERRIDDEN = "is_tz_overridden"
         private const val KEY_AUTO_BOOT = "auto_restore_on_boot"
         private const val KEY_THEME_MODE = "app_theme_mode"
         private const val KEY_DYNAMIC_COLOR = "use_dynamic_color"

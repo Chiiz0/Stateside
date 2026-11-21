@@ -58,7 +58,7 @@
 
 ## 1 分钟首次激活上手
 
-1. 前往 [Releases 页面](https://github.com/Chiiz0/Stateside/releases) 下载最新 `Stateside-v1.3.0-release.apk` 安装并打开，点击顶部提示授予**电话状态、通知与本地网络权限**。
+1. 前往 [Releases 页面](https://github.com/Chiiz0/Stateside/releases) 下载最新 `Stateside-v1.4.0-release.apk` 安装并打开，点击顶部提示授予**电话状态、通知与本地网络权限**。
 2. 点击主界面 **「开始 1 分钟首次激活」**：
    - 先按向导红框提示开启当前品牌唯一必开的附加开关（见下表）；
    - 点击 **「启动配对雷达并跳转『无线调试』」**，打开「无线调试」（勾选*始终允许在此网络上调试*），点开 **「使用配对码配对设备」**。

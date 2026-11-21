@@ -14,6 +14,85 @@ enum class AppThemeMode(
     }
 }
 
+enum class TimezoneMode(
+    val id: String,
+    val title: String,
+    val shortBadge: String,
+    val description: String
+) {
+    KEEP_NATIVE(
+        id = "keep_native",
+        title = "保持本机原时区（默认推荐）",
+        shortBadge = "保持本机",
+        description = "不改动手机状态栏与系统日程时区，适合日常使用 Claude、ChatGPT、X 等应用"
+    ),
+    GLOBAL_US(
+        id = "global_us",
+        title = "方案一：全局跟随美境同步切时区",
+        shortBadge = "全局美区",
+        description = "开启美境时同步将系统切换为目标美区时区；执行「还原默认」时自动恢复原时区"
+    ),
+    COMPANION_APP(
+        id = "companion_app",
+        title = "方案二：随开随切 · 退出即还",
+        shortBadge = "动态伴随",
+        description = "从美境快启坞或桌面守卫图标打开指定应用前自动切为美区时区，退出应用后自动静默归位原时区"
+    );
+
+    companion object {
+        fun fromId(id: String?): TimezoneMode =
+            entries.firstOrNull { it.id == id } ?: KEEP_NATIVE
+    }
+}
+
+enum class UsTimezonePreset(
+    val id: String,
+    val zoneId: String,
+    val chipLabel: String,
+    val cityLabel: String
+) {
+    LOS_ANGELES(
+        id = "us_lax",
+        zoneId = "America/Los_Angeles",
+        chipLabel = "美西 · 洛杉矶 (PT)",
+        cityLabel = "美西洛杉矶"
+    ),
+    NEW_YORK(
+        id = "us_nyc",
+        zoneId = "America/New_York",
+        chipLabel = "美东 · 纽约 (ET)",
+        cityLabel = "美东纽约"
+    ),
+    CHICAGO(
+        id = "us_chi",
+        zoneId = "America/Chicago",
+        chipLabel = "美中 · 芝加哥 (CT)",
+        cityLabel = "美中芝加哥"
+    ),
+    DENVER(
+        id = "us_den",
+        zoneId = "America/Denver",
+        chipLabel = "山地 · 丹佛 (MT)",
+        cityLabel = "山地丹佛"
+    ),
+    HONOLULU(
+        id = "us_hnl",
+        zoneId = "Pacific/Honolulu",
+        chipLabel = "夏威夷 · 檀香山 (HT)",
+        cityLabel = "夏威夷"
+    );
+
+    companion object {
+        val ALL_MANAGED_ZONE_IDS: Set<String> = entries.map { it.zoneId.lowercase() }.toSet()
+
+        fun isManagedUsZone(zoneId: String?): Boolean =
+            !zoneId.isNullOrBlank() && zoneId.trim().lowercase() in ALL_MANAGED_ZONE_IDS
+
+        fun fromId(id: String?): UsTimezonePreset =
+            entries.firstOrNull { it.id == id } ?: LOS_ANGELES
+    }
+}
+
 /**
  * 内置美国目标区域与运营商显示预设。
  * 默认使用「保持原运营商显示（推荐）」：仅将电话卡国家码（SIM Country ISO）覆盖为美国 `us`（与 Simlet 默认行为一致），

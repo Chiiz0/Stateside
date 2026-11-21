@@ -8,7 +8,9 @@ import java.io.File
 
 enum class PrivilegedAction {
     APPLY_US_ENV,
-    RESTORE_CN_DEFAULT
+    RESTORE_CN_DEFAULT,
+    SWITCH_US_TIMEZONE,
+    RESTORE_HOME_TIMEZONE
 }
 
 data class SimSlotOutcome(

@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.stateside.env.model.CoreSuiteApp
+import app.stateside.env.model.TimezoneMode
 import app.stateside.env.ui.CoreSuiteUiItem
 import app.stateside.env.ui.ExtraEnglishAppUiItem
 import app.stateside.env.ui.MainUiState
@@ -51,6 +52,9 @@ fun AppLocaleScreen(
     onApplyStateside: () -> Unit,
     onSafeLaunchApp: (String) -> Unit,
     onToggleCoreSuiteApp: (CoreSuiteApp) -> Unit,
+    onToggleCompanionSuite: (CoreSuiteApp) -> Unit,
+    onToggleCompanionExtraPkg: (String, String) -> Unit,
+    onOpenTimezoneStudio: () -> Unit,
     onOpenAppPicker: () -> Unit,
     onRemoveExtraPkg: (String) -> Unit,
     onPinShortcutForApp: (String, String) -> Unit
@@ -124,14 +128,24 @@ fun AppLocaleScreen(
         // 2. 预设四大海外与 AI 核心应用套件
         SectionGroupCard(
             title = "核心海外与 AI 套件",
-            subtitle = "开箱默认启用，自动识别 Google Play 动态英文分包并固定 en-US",
-            contentPadding = cardPadding
+            subtitle = "开箱默认启用，支持单应用按需开启「随开随切」动态伴随时区",
+            contentPadding = cardPadding,
+            trailing = {
+                ActionMicroChip(
+                    icon = StatesideIcons.ClockTimezone,
+                    label = state.userSettings.timezoneMode.shortBadge,
+                    active = state.userSettings.timezoneMode != TimezoneMode.KEEP_NATIVE,
+                    onClick = onOpenTimezoneStudio
+                )
+            }
         ) {
             state.coreSuiteItems.forEach { item ->
                 CoreSuiteEngineCard(
                     item = item,
+                    isCompanionModeActive = state.userSettings.timezoneMode == TimezoneMode.COMPANION_APP,
                     canPinShortcut = state.hasPrivilegeChannel,
                     onToggle = { onToggleCoreSuiteApp(item.suiteApp) },
+                    onToggleCompanionTz = { onToggleCompanionSuite(item.suiteApp) },
                     onSafeLaunch = { pkg -> onSafeLaunchApp(pkg) },
                     onPinShortcut = { pkg -> onPinShortcutForApp(pkg, item.suiteApp.title) }
                 )
@@ -164,8 +178,10 @@ fun AppLocaleScreen(
                 state.extraAppItems.forEach { extra ->
                     ExtraAppEngineCard(
                         extra = extra,
+                        isCompanionModeActive = state.userSettings.timezoneMode == TimezoneMode.COMPANION_APP,
                         canPinShortcut = state.hasPrivilegeChannel,
                         onSafeLaunch = { onSafeLaunchApp(extra.packageName) },
+                        onToggleCompanionTz = { onToggleCompanionExtraPkg(extra.packageName, extra.appLabel) },
                         onPinShortcut = { onPinShortcutForApp(extra.packageName, extra.appLabel) },
                         onRemove = { onRemoveExtraPkg(extra.packageName) }
                     )
@@ -252,8 +268,10 @@ private fun LocaleCompareTile(
 @Composable
 private fun CoreSuiteEngineCard(
     item: CoreSuiteUiItem,
+    isCompanionModeActive: Boolean,
     canPinShortcut: Boolean,
     onToggle: () -> Unit,
+    onToggleCompanionTz: () -> Unit,
     onSafeLaunch: (String) -> Unit,
     onPinShortcut: (String) -> Unit
 ) {
@@ -339,10 +357,16 @@ private fun CoreSuiteEngineCard(
                         label = "安全启动",
                         onClick = { onSafeLaunch(installedPkg) }
                     )
+                    ActionMicroChip(
+                        icon = StatesideIcons.ClockTimezone,
+                        label = if (isCompanionModeActive && item.isCompanionTzEnabled) "伴随时区: 开" else "伴随时区",
+                        active = isCompanionModeActive && item.isCompanionTzEnabled,
+                        onClick = onToggleCompanionTz
+                    )
                     if (canPinShortcut) {
                         ActionMicroChip(
                             icon = StatesideIcons.ShieldCheck,
-                            label = "桌面防漏改图标",
+                            label = "桌面守卫图标",
                             onClick = { onPinShortcut(installedPkg) }
                         )
                     }
@@ -356,8 +380,10 @@ private fun CoreSuiteEngineCard(
 @Composable
 private fun ExtraAppEngineCard(
     extra: ExtraEnglishAppUiItem,
+    isCompanionModeActive: Boolean,
     canPinShortcut: Boolean,
     onSafeLaunch: () -> Unit,
+    onToggleCompanionTz: () -> Unit,
     onPinShortcut: () -> Unit,
     onRemove: () -> Unit
 ) {
@@ -436,10 +462,16 @@ private fun ExtraAppEngineCard(
                         label = "安全启动",
                         onClick = onSafeLaunch
                     )
+                    ActionMicroChip(
+                        icon = StatesideIcons.ClockTimezone,
+                        label = if (isCompanionModeActive && extra.isCompanionTzEnabled) "伴随时区: 开" else "伴随时区",
+                        active = isCompanionModeActive && extra.isCompanionTzEnabled,
+                        onClick = onToggleCompanionTz
+                    )
                     if (canPinShortcut) {
                         ActionMicroChip(
                             icon = StatesideIcons.ShieldCheck,
-                            label = "桌面防漏改图标",
+                            label = "桌面守卫图标",
                             onClick = onPinShortcut
                         )
                     }
@@ -453,13 +485,21 @@ private fun ExtraAppEngineCard(
 private fun ActionMicroChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
+    active: Boolean = false,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(9.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        color = if (active) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (active) MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+        )
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -468,7 +508,7 @@ private fun ActionMicroChip(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(14.dp)
             )
             Spacer(Modifier.width(5.dp))
@@ -476,7 +516,7 @@ private fun ActionMicroChip(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
+                color = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary,
                 softWrap = false,
                 maxLines = 1
             )

@@ -39,6 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.stateside.env.model.TimezoneMode
+import app.stateside.env.timezone.CompanionTzSessionState
 import app.stateside.env.ui.DockAppUiItem
 import app.stateside.env.ui.MainUiState
 import app.stateside.env.ui.components.IconBadgeBox
@@ -69,9 +71,95 @@ fun DashboardScreen(
     onNavigateToSimStudio: () -> Unit,
     onNavigateToAppEngine: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onOpenTimezoneStudio: () -> Unit,
+    onRestoreCompanionTimezoneNow: () -> Unit,
     onOpenEnvironmentInspector: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // 若方案二「动态伴随时区」正在生效或待归位，在首页顶部呈现一目了然的状态横幅
+        when (val comp = state.companionSession) {
+            CompanionTzSessionState.Idle -> Unit
+            is CompanionTzSessionState.Active -> {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = StatesideIcons.ClockTimezone,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "伴随时区运行中 · ${comp.zoneLabel}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "正在守护 ${comp.appTitle}，退出应用后将自动归位原时区",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        FilledTonalButton(
+                            onClick = onRestoreCompanionTimezoneNow,
+                            contentPadding = PaddingValues(horizontal = 11.dp, vertical = 6.dp)
+                        ) {
+                            Text("立即归位", softWrap = false, maxLines = 1)
+                        }
+                    }
+                }
+            }
+            is CompanionTzSessionState.WaitingRestoreRetry -> {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.75f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = StatesideIcons.ClockTimezone,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "伴随时区待归位（当前：${comp.zoneLabel}）",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = comp.reason,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        FilledTonalButton(
+                            onClick = onRestoreCompanionTimezoneNow,
+                            contentPadding = PaddingValues(horizontal = 11.dp, vertical = 6.dp)
+                        ) {
+                            Text("一键归位", softWrap = false, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
         // 1. 权限缺省提醒条（全齐后自动隐藏，保持日常界面极致清爽）
         if (!state.hasAllRecommendedPermissions) {
             Surface(
@@ -172,20 +260,24 @@ fun DashboardScreen(
             CapabilityModuleSpec(
                 title = "应用英语沙盒",
                 liveStatus = "${state.confirmedEnglishAppsCount}/${state.installedTargetEnglishAppsCount} 款就绪",
-                description = "系统中文 · 应用独立 en-US",
+                description = "系统中文 · 应用 en-US",
                 icon = StatesideIcons.GlobeLanguage,
                 accentColor = MaterialTheme.colorScheme.secondary,
                 containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
                 onClick = onNavigateToAppEngine
             ),
             CapabilityModuleSpec(
-                title = "环境透视自检",
-                liveStatus = state.telemetry.systemTimezoneOffset,
-                description = "国家码 · 语言 · 时区核验",
-                icon = StatesideIcons.RadarScan,
+                title = "美区时区引擎",
+                liveStatus = when (state.userSettings.timezoneMode) {
+                    TimezoneMode.KEEP_NATIVE -> "保持本机 (${state.telemetry.systemTimezoneOffset})"
+                    TimezoneMode.GLOBAL_US -> "全局 · ${state.userSettings.selectedUsTimezone.cityLabel}"
+                    TimezoneMode.COMPANION_APP -> "动态伴随 · ${state.enabledCompanionAppsCount} 款"
+                },
+                description = "全局同步 · 随开随切",
+                icon = StatesideIcons.ClockTimezone,
                 accentColor = MaterialTheme.colorScheme.tertiary,
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.65f),
-                onClick = onOpenEnvironmentInspector
+                onClick = onOpenTimezoneStudio
             ),
             CapabilityModuleSpec(
                 title = "自愈与通道设置",
@@ -538,7 +630,11 @@ private fun SafeLaunchDockGrid(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = if (isEnvironmentReady && item.isEnglishConfirmed) "en-US 秒开" else "校验后打开",
+                                    text = when {
+                                        item.usesCompanionTz -> "en-US + 伴随时区"
+                                        isEnvironmentReady && item.isEnglishConfirmed -> "en-US 秒开"
+                                        else -> "校验后打开"
+                                    },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (isEnvironmentReady && item.isEnglishConfirmed) {
                                         MaterialTheme.colorScheme.secondary
